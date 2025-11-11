@@ -7,17 +7,22 @@
   environment:
     KUBECONFIG: "{{ admin_kubeconfig | to_yaml | cloudkit.service.to_temp_file }}"
 
-  vars:
-    cluster_order: "{{ ansible_eda.event.payload }}"
+  # vars:
+  #   cluster_order: "{{ ansible_eda.event.payload }}"
 
   pre_tasks:
-    - name: Apply default settings
-      ansible.builtin.include_role:
-        name: cloudkit.service.cluster_settings
+    # - name: Apply default settings
+    #   ansible.builtin.include_role:
+    #     name: cloudkit.service.cluster_settings
 
-    - name: Extract template info
-      ansible.builtin.include_role:
-        name: cloudkit.service.extract_template_info
+    # - name: Extract template info
+    #   ansible.builtin.include_role:
+    #     name: cloudkit.service.extract_template_info
+
+
+    - name: Set template id
+      ansible.builtin.set_fact:
+        template_id: "ai-cluster-demo"
 
   tasks:
     - name: Post-install hosted cluster configuration

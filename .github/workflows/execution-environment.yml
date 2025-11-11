@@ -8,10 +8,10 @@ concurrency:
 on:
   push:
     branches:
-      - main
+      - '**'
   pull_request:
     branches:
-      - main
+      - '**'
 
 jobs:
   build-execution-environment:
@@ -41,12 +41,12 @@ jobs:
                                             -f "./execution-environment/execution-environment.yaml"
 
       - name: Log against GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/aap-ai-cluster-demo'
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | podman login --username ${{ github.actor }} --password-stdin ghcr.io
 
       - name: Push execution environment image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/aap-ai-cluster-demo'
         run: |
           IMAGE_NAME="ghcr.io/${{ github.repository }}"
           IMAGE_NAME_LATEST="${IMAGE_NAME}:latest"
