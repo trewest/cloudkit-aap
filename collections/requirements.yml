@@ -19,3 +19,6 @@ collections:
     version: "2.8.2"
   - name: infra.aap_configuration
     version: "3.4.1"
+  - name: git+https://github.com/trewest/ai-cluster-demo.git
+    type: git
+    version: main
