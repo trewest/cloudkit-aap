@@ -4,25 +4,13 @@
   connection: local
   gather_facts: false
 
-  environment:
-    KUBECONFIG: "{{ admin_kubeconfig | to_yaml | cloudkit.service.to_temp_file }}"
-
-  # vars:
-  #   cluster_order: "{{ ansible_eda.event.payload }}"
+  # environment:
+  #   KUBECONFIG: "{{ admin_kubeconfig | to_yaml | cloudkit.service.to_temp_file }}"
 
   pre_tasks:
-    # - name: Apply default settings
-    #   ansible.builtin.include_role:
-    #     name: cloudkit.service.cluster_settings
-
-    # - name: Extract template info
-    #   ansible.builtin.include_role:
-    #     name: cloudkit.service.extract_template_info
-
-
     - name: Set template id
       ansible.builtin.set_fact:
-        template_id: "ai-cluster-demo"
+        template_id: "trewest.ai_cluster_demo.ocp_4_17_small_ai_ready"
 
   tasks:
     - name: Post-install hosted cluster configuration

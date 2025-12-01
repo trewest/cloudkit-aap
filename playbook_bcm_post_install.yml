@@ -1,0 +1,310 @@
+- name: BCM hosted cluster post-install configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    bcm_agent_image_repo: ghcr.io/fabiendupont/nvidia-bcm-lite-daemon
+    bcm_agent_image_tag: latest
+    bcm_agent_port: "8081"
+    bcm_agent_secret_name: bcm-bootstrap-cert
+  tasks:
+  - name: Set kubeconfig file
+    ansible.builtin.shell: |
+      oc login --token {{ management_cluster_token }} --server {{ management_cluster_api_url }} --insecure-skip-tls-verify
+
+  - name: Retrieve hosted cluster kubeconfig
+    ansible.builtin.include_role:
+      name: cloudkit.service.retrieve_kubeconfig
+    vars:
+        retrieve_kubeconfig_cluster_name: "{{ hosted_cluster_name }}"
+        retrieve_kubeconfig_namespace: "{{ hosted_cluster_namespace }}"
+
+  - name: Deploy BCM lite agent
+    environment:
+      K8S_AUTH_KUBECONFIG: "{{ admin_kubeconfig | default({}) | to_yaml | cloudkit.service.to_temp_file }}"
+    block:
+      - name: Create BCM agent namespace
+        kubernetes.core.k8s:
+          api_version: v1
+          kind: Namespace
+          name: bcm-agent
+          state: present
+
+      - name: Create rolebinding for serviceaccount 
+        kubernetes.core.k8s:
+          state: present
+          definition:
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: RoleBinding
+            metadata:
+              name: system:openshift:scc:privileged
+              namespace: bcm-agent
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: ClusterRole
+              name: system:openshift:scc:privileged
+            subjects:
+            - kind: ServiceAccount
+              name: bcm-agent
+              namespace: bcm-agent
+
+      - name: Create BCM bootstrap certificate secret
+        kubernetes.core.k8s:
+          state: present
+          definition:
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: "{{ bcm_agent_secret_name }}"
+              namespace: bcm-agent
+            type: Opaque
+            data:
+              cacert.pem: "{{ bcm_agent_cacert | b64encode }}"
+              cert.pem: "{{ bcm_agent_cert | b64encode }}"
+              cert.key: "{{ bcm_agent_cert_key | b64encode }}"
+
+      # - name: Get resources from helm
+      #   ansible.builtin.shell: |
+      #     helm template bcm-agent {{ helm_charts_dir }}/bcm-agent --namespace bcm-agent --set image.repository={{ bcm_agent_image_repo }} --set image.tag={{ bcm_agent_image_tag }}  --set config.bcm.host={{ bcm_agent_host }} --set config.bcm.port={{ bcm_agent_port }} --set certificates.secretName={{ bcm_agent_secret_name }}
+      #   register: bcm_agent_resources
+      #   changed_when: false
+      - name: Create bcm-agent serviceaccount
+        kubernetes.core.k8s:
+          state: present
+          definition:
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              name: bcm-agent
+              namespace: bcm-agent
+
+      - name: Create bcm-agent clusterrole
+        kubernetes.core.k8s:
+          state: present
+          apply: true
+          definition:
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRole
+            metadata:
+              name: bcm-agent
+            rules:
+              - apiGroups: [""]
+                resources: ["nodes"]
+                verbs: ["get", "list", "watch"]
+              - apiGroups: [""]
+                resources: ["nodes"]
+                verbs: ["patch", "update"]
+              - apiGroups: [""]
+                resources: ["nodes/status"]
+                verbs: ["get", "patch"]
+
+      - name: Create bcm-agent clusterrolebinding
+        kubernetes.core.k8s:
+          state: present
+          apply: true
+          definition:
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRoleBinding
+            metadata:
+              name: bcm-agent
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: ClusterRole
+              name: bcm-agent
+            subjects:
+              - kind: ServiceAccount
+                name: bcm-agent
+                namespace: bcm-agent
+
+      - name: Create bcm-agent metrics service
+        kubernetes.core.k8s:
+          state: present
+          apply: true
+          definition:
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: bcm-agent-metrics
+              namespace: bcm-agent
+              annotations:
+                prometheus.io/port: "9100"
+                prometheus.io/scrape: "true"
+            spec:
+              type: ClusterIP
+              clusterIP: None  # Headless service for DaemonSet
+              selector:
+                app.kubernetes.io/name: bcm-agent
+                app.kubernetes.io/instance: bcm-agent
+              ports:
+                - name: metrics
+                  port: 9100
+                  targetPort: metrics
+                  protocol: TCP
+
+      - name: Create bcm-agent daemonset
+        kubernetes.core.k8s:
+          state: present
+          apply: true
+          definition:
+            apiVersion: apps/v1
+            kind: DaemonSet
+            metadata:
+              name: bcm-agent
+              namespace: bcm-agent
+            spec:
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: bcm-agent
+                  app.kubernetes.io/instance: bcm-agent
+              updateStrategy:
+                rollingUpdate:
+                  maxUnavailable: 1
+                type: RollingUpdate
+              template:
+                metadata:
+                  annotations:
+                    prometheus.io/scrape: "true"
+                    prometheus.io/port: "9100"
+                    prometheus.io/path: "/metrics"
+                  labels:
+                    app.kubernetes.io/name: bcm-agent
+                    app.kubernetes.io/instance: bcm-agent
+                spec:
+                  serviceAccountName: bcm-agent
+                  hostNetwork: true
+                  hostPID: true
+                  hostIPC: true
+                  tolerations:
+                    - operator: Exists
+                  priorityClassName: system-node-critical
+                  containers:
+                    - name: bcm-agent
+                      image: "{{ bcm_agent_image_repo }}:{{ bcm_agent_image_tag }}"
+                      imagePullPolicy: IfNotPresent
+                      env:
+                        # Node identification (from Kubernetes downward API)
+                        - name: NODE_NAME
+                          valueFrom:
+                            fieldRef:
+                              fieldPath: spec.nodeName
+
+                        # BCM head node configuration
+                        - name: BCM_HOST
+                          value: "{{ bcm_agent_host }}"
+                        - name: BCM_PORT
+                          value: "{{ bcm_agent_port | string }}"
+
+                        # Certificate paths
+                        - name: CERT_FILE
+                          value: "/etc/bcm-agent/certs/cert.pem"
+                        - name: KEY_FILE
+                          value: "/etc/bcm-agent/certs/cert.key"
+                        - name: CA_FILE
+                          value: "/etc/bcm-agent/certs/cacert.pem"
+
+                        # Kubernetes integration configuration
+                        - name: SYNC_INTERVAL
+                          value: "300"
+                        - name: LABEL_PREFIX
+                          value: "bcm.nvidia.com"
+                        - name: ENABLE_LABELING
+                          value: "true"
+
+                        # Metrics configuration
+                        - name: METRICS_PORT
+                          value: "9100"
+
+                        # Logging and debugging
+                        - name: LOG_LEVEL
+                          value: "info"
+                      ports:
+                        - name: metrics
+                          containerPort: 9100
+                          protocol: TCP
+                      securityContext:
+                        capabilities:
+                          add:
+                          - SYS_ADMIN
+                          - SYS_RAWIO
+                          - NET_ADMIN
+                        privileged: true
+                        runAsUser: 0
+                      resources:
+                        limits:
+                          cpu: 500m
+                          memory: 512Mi
+                        requests:
+                          cpu: 100m
+                          memory: 256Mi
+                      volumeMounts:
+                        # Bootstrap certificate (shared, for auto-generating per-node certs)
+                        - name: bootstrap-certs
+                          mountPath: /etc/bcm-bootstrap
+                          readOnly: true
+                        # Per-node certificates (auto-generated on first run, persisted on host)
+                        - name: node-certs
+                          mountPath: /var/lib/bcm-agent/certs
+
+                        # Hardware access
+                        - name: dev
+                          mountPath: /dev
+                        - name: sys
+                          mountPath: /sys
+                        - name: proc
+                          mountPath: /host/proc
+                          readOnly: true
+                        - name: firmware
+                          mountPath: /lib/firmware
+                          readOnly: true
+
+                        # Working directories
+                        - name: log
+                          mountPath: /var/log/bcm-agent
+                        - name: run
+                          mountPath: /var/run/bcm-agent
+                      livenessProbe:
+                        failureThreshold: 3
+                        httpGet:
+                          path: /
+                          port: metrics
+                        initialDelaySeconds: 60
+                        periodSeconds: 60
+                        timeoutSeconds: 10
+                      readinessProbe:
+                        httpGet:
+                          path: /
+                          port: metrics
+                        initialDelaySeconds: 30
+                        periodSeconds: 30
+                        timeoutSeconds: 5
+                  volumes:
+                    # Bootstrap certificate (shared Secret for auto-provisioning per-node certs)
+                    - name: bootstrap-certs
+                      secret:
+                        secretName: "{{ bcm_agent_secret_name }}"
+                        defaultMode: 0400
+                    # Per-node certificates (auto-generated on first run, persisted on host)
+                    - name: node-certs
+                      hostPath:
+                        path: /var/lib/bcm-agent/certs
+                        type: DirectoryOrCreate
+
+                    # Hardware access volumes
+                    - name: dev
+                      hostPath:
+                        path: /dev
+                    - name: sys
+                      hostPath:
+                        path: /sys
+                    - name: proc
+                      hostPath:
+                        path: /proc
+                    - name: firmware
+                      hostPath:
+                        path: /lib/firmware
+
+                    # Working directories
+                    - name: log
+                      emptyDir: {}
+                    - name: run
+                      emptyDir: {}
