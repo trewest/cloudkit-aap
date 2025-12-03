@@ -10,7 +10,7 @@
   pre_tasks:
     - name: Set template id
       ansible.builtin.set_fact:
-        template_id: "trewest.ai_cluster_demo.ocp_4_17_small_ai_ready"
+        template_id: "trewest.ai_cluster_demo.ocp_4_19_h100"
 
   tasks:
     - name: Post-install hosted cluster configuration
