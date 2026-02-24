@@ -1,0 +1,53 @@
+---
+# Main entry point for nvidia_bmm_infra role
+# Routes to create or delete tasks based on nvidia_bmm_infra_state
+
+- name: Validate required NVIDIA BMM credentials are available
+  ansible.builtin.assert:
+    that:
+      - nvidia_bmm_api_url | length > 0
+      - nvidia_bmm_api_token | length > 0 or (nvidia_bmm_client_id | length > 0 and nvidia_bmm_client_secret | length > 0)
+      - nvidia_bmm_org | length > 0
+      - nvidia_bmm_tenant_id | length > 0
+      - nvidia_bmm_site_id | length > 0
+    fail_msg: >
+      NVIDIA BMM credentials are not properly configured. Please ensure the following
+      environment variables are set: NVIDIA_BMM_API_URL, NVIDIA_BMM_API_TOKEN (or
+      NVIDIA_BMM_CLIENT_ID and NVIDIA_BMM_CLIENT_SECRET), NVIDIA_BMM_ORG,
+      NVIDIA_BMM_TENANT_ID, NVIDIA_BMM_SITE_ID
+
+- name: Obtain API token from client credentials if not provided
+  when: nvidia_bmm_api_token | length == 0
+  block:
+    - name: Exchange client credentials for JWT token
+      ansible.builtin.uri:
+        url: "{{ nvidia_bmm_ssa_token_url }}"
+        method: POST
+        url_username: "{{ nvidia_bmm_client_id }}"
+        url_password: "{{ nvidia_bmm_client_secret }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body: "{{ _nvidia_bmm_oauth_body }}"
+        status_code: 200
+      register: nvidia_bmm_token_response
+      no_log: false
+      vars:
+        _nvidia_bmm_oauth_body_base:
+          grant_type: client_credentials
+        _nvidia_bmm_oauth_body_scope: "{{ {'scope': nvidia_bmm_oauth_scope} if nvidia_bmm_oauth_scope | length > 0 else {} }}"
+        _nvidia_bmm_oauth_body: "{{ _nvidia_bmm_oauth_body_base | combine(_nvidia_bmm_oauth_body_scope) }}"
+
+    - name: Set API token from response
+      ansible.builtin.set_fact:
+        nvidia_bmm_api_token: "{{ nvidia_bmm_token_response.json.access_token }}"
+      no_log: false
+
+- name: Create NVIDIA BMM infrastructure
+  ansible.builtin.include_tasks: create_nvidia_bmm_infra.yaml
+  when: nvidia_bmm_infra_state == 'present'
+
+- name: Delete NVIDIA BMM infrastructure
+  ansible.builtin.include_tasks: delete_nvidia_bmm_infra.yaml
+  when: nvidia_bmm_infra_state == 'absent'
+
+

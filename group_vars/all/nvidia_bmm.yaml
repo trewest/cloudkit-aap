@@ -1,0 +1,81 @@
+---
+# NVIDIA Bare Metal Manager Configuration
+# ========================================
+# These settings configure the NVIDIA BMM infrastructure provider.
+# Sensitive values (api_token, client_secret) should be provided via:
+#   1. Environment variables (recommended for AAP)
+#   2. Ansible Vault encrypted values
+#   3. External secrets management (e.g., HashiCorp Vault)
+#
+# NEVER commit actual secrets to this file!
+
+# API Connection Settings
+# -----------------------
+# These can be overridden via environment variables:
+#   - NVIDIA_BMM_API_URL
+#   - NVIDIA_BMM_API_TOKEN
+#   - NVIDIA_BMM_ORG
+#   - NVIDIA_BMM_API_PATH_PREFIX
+#   - NVIDIA_BMM_OAUTH_SCOPE (optional, for OAuth token exchange)
+
+nvidia_bmm_api_url: "{{ lookup('env', 'NVIDIA_BMM_API_URL') | default('', true) }}"
+nvidia_bmm_api_token: "{{ lookup('env', 'NVIDIA_BMM_API_TOKEN') | default('', true) }}"
+nvidia_bmm_org: "{{ lookup('env', 'NVIDIA_BMM_ORG') | default('', true) }}"
+nvidia_bmm_api_path_prefix: "{{ lookup('env', 'NVIDIA_BMM_API_PATH_PREFIX') | default('forge', true) }}"
+
+# Tenant and Site Configuration
+# -----------------------------
+# These are typically set per-deployment and should not be in templates
+nvidia_bmm_tenant_id: "{{ lookup('env', 'NVIDIA_BMM_TENANT_ID') | default('', true) }}"
+nvidia_bmm_site_id: "{{ lookup('env', 'NVIDIA_BMM_SITE_ID') | default('', true) }}"
+
+# OAuth/SSA Token Exchange Configuration (for automated token refresh)
+# --------------------------------------------------------------------
+# Used to exchange client credentials for a JWT token
+nvidia_bmm_ssa_token_url: "{{ lookup('env', 'NVIDIA_BMM_SSA_TOKEN_URL') | default('', true) }}"
+nvidia_bmm_client_id: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_ID') | default('', true) }}"
+nvidia_bmm_client_secret: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_SECRET') | default('', true) }}"
+nvidia_bmm_oauth_scope: "{{ lookup('env', 'NVIDIA_BMM_OAUTH_SCOPE') | default('', true) }}"
+
+# Instance Type Mappings
+# ----------------------
+# NOTE: Instance type mappings should be defined in each template's
+# defaults/main.yaml file, NOT here. This keeps template-specific
+# configuration with the template itself.
+#
+# Example in template defaults/main.yaml:
+#   nvidia_bmm_instance_type_mappings:
+#     dgx: "abcd-efgh-ijkl-mnop"
+#     gpu_small: "qrst-uvwx-yzab-cdef"
+#
+# This global fallback is only used if a template doesn't define its own mappings.
+nvidia_bmm_instance_type_mappings: {}
+
+# Default Operating System
+# ------------------------
+nvidia_bmm_default_operating_system_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_OS_ID') | default('', true) }}"
+
+# SSH Key Configuration
+# ---------------------
+# Default SSH key group ID for instance provisioning
+nvidia_bmm_default_ssh_key_group_id: "{{ lookup('env', 'NVIDIA_BMM_SSH_KEY_GROUP_ID') | default('', true) }}"
+
+# Network Configuration
+# ---------------------
+# Default IP block for VPC prefix allocation
+nvidia_bmm_default_ip_block_id: "{{ lookup('env', 'NVIDIA_BMM_IP_BLOCK_ID') | default('', true) }}"
+
+# Network virtualization type (FNN or other)
+nvidia_bmm_network_virtualization_type: "FNN"
+
+# Default VPC prefix length
+nvidia_bmm_default_prefix_length: 24
+
+# Labels applied to all NVIDIA BMM resources
+nvidia_bmm_common_labels:
+  managed-by: osac
+  provider: nvidia-bmm
+
+# Agent resource class label (for consistency with ESI-based deployments)
+nvidia_bmm_agent_resource_class_label: "nvidia.bare_metal/resource_class"
+

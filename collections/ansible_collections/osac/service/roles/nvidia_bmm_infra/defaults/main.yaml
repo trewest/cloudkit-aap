@@ -1,0 +1,81 @@
+---
+# Defaults for nvidia_bmm_infra role
+# These can be overridden by group_vars or playbook variables
+
+# State: present or absent
+nvidia_bmm_infra_state: present
+
+# Cluster/infrastructure name (used for naming resources)
+nvidia_bmm_infra_name: ""
+
+# Namespace where the cluster resources will be created
+nvidia_bmm_infra_namespace: ""
+
+# Node requests from the ClusterOrder
+nvidia_bmm_infra_node_requests: []
+
+# Wait for instances to be ready
+nvidia_bmm_infra_wait: true
+nvidia_bmm_infra_wait_timeout: 1800
+
+# VPC configuration
+nvidia_bmm_infra_vpc_name_prefix: "osac-vpc"
+nvidia_bmm_infra_prefix_length: "{{ nvidia_bmm_default_prefix_length | default(24) }}"
+
+# Optional: Use existing VPC instead of creating a new one
+# If set, the role will use this VPC ID instead of creating a new VPC
+nvidia_bmm_infra_vpc_id: ""
+
+# Optional: Use existing VPC prefix instead of creating a new one
+# If set, the role will use this prefix ID instead of creating a new prefix
+nvidia_bmm_infra_vpc_prefix_id: ""
+
+# Optional: Override the default IP block for VPC prefix allocation
+nvidia_bmm_infra_ip_block_id: ""
+
+# Instance naming
+nvidia_bmm_infra_instance_name_prefix: "osac-node"
+
+# Topology optimization for batch instance creation
+# Set to false if the NVIDIA BMM API doesn't support the batch endpoint
+nvidia_bmm_infra_topology_optimized: false
+
+# Optional: Override instance type ID for all nodes
+# If set, this takes precedence over nvidia_bmm_instance_type_mappings
+nvidia_bmm_infra_instance_type_id: ""
+
+# Optional: Override SSH key group ID for instance provisioning
+# If set, this takes precedence over nvidia_bmm_default_ssh_key_group_id
+nvidia_bmm_infra_ssh_key_group_id: ""
+
+# InfraEnv lookup configuration
+# The role waits for the InfraEnv to be ready to get the iPXE boot URL
+nvidia_bmm_infra_infraenv_retries: 30
+nvidia_bmm_infra_infraenv_delay: 10
+
+# InfraEnv name - the shared hardware inventory InfraEnv
+nvidia_bmm_infra_infraenv_name: "hardware-inventory"
+
+# InfraEnv namespace - the shared hardware inventory namespace
+nvidia_bmm_infra_infraenv_namespace: "hardware-inventory"
+
+# Whether to validate SSL certificates when fetching the iPXE script
+# Set to true in production environments with proper certificates
+nvidia_bmm_infra_validate_certs: false
+
+# Optional: DNS server to use for iPXE script network operations
+# When set, this DNS server is configured in the iPXE script before
+# fetching boot resources. Useful when the default DNS cannot resolve
+# the InfraEnv URLs.
+# Set via NVIDIA_BMM_IPXE_DNS_SERVER environment variable
+nvidia_bmm_infra_ipxe_dns_server: "{{ lookup('env', 'NVIDIA_BMM_IPXE_DNS_SERVER') | default('', true) }}"
+
+# Agent registration wait configuration
+# How long to wait for agents to register after instance provisioning
+nvidia_bmm_infra_agent_registration_retries: 90
+nvidia_bmm_infra_agent_registration_delay: 10
+
+# Optional: Cluster deployment to attach agents to
+# If set, agents will be attached to this cluster deployment
+nvidia_bmm_infra_cluster_deployment_name: ""
+nvidia_bmm_infra_cluster_deployment_namespace: "{{ nvidia_bmm_infra_namespace }}"

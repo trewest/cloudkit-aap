@@ -1,0 +1,88 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy OpenShift 4.20 cluster on NVIDIA BMM infrastructure
+    description:
+      - This template provisions an OpenShift 4.20 cluster using NVIDIA Bare Metal
+      - Manager for infrastructure. It creates VPCs, provisions bare metal instances,
+      - and deploys a Hosted Control Plane cluster on the provisioned infrastructure.
+    options:
+      cluster_order:
+        description: The ClusterOrder Kubernetes resource
+        type: dict
+        required: true
+      cluster_working_namespace:
+        description: Namespace for cluster resources
+        type: str
+        required: true
+      node_requests:
+        description: List of node requests specifying resource classes and counts
+        type: list
+        elements: dict
+        options:
+          numberOfNodes:
+            description: Number of nodes to provision
+            type: int
+            required: true
+          resourceClass:
+            description: >
+              Resource class identifier. Must have a corresponding entry in
+              template_instance_type_mappings.
+            type: str
+            required: true
+      template_parameters:
+        description: User-provided parameters for cluster configuration
+        type: dict
+        options:
+          pull_secret:
+            description: >
+              The pull secret contains credentials for authenticating to image
+              repositories. This is required for OpenShift installation.
+            type: str
+            required: true
+          ssh_public_key:
+            description: >
+              A public SSH key that will be installed into the authorized_keys
+              file of the core user on cluster worker nodes.
+            type: str
+            required: true
+          ocp_release_image:
+            description: >
+              Optional override for the OpenShift release image. If not provided,
+              the default 4.20 release image will be used.
+            type: str
+            required: false
+          vpc_id:
+            description: >
+              Optional existing VPC ID to use. If not provided, a new VPC will
+              be created for this cluster.
+            type: str
+            required: false
+          vpc_prefix_id:
+            description: >
+              Optional existing VPC prefix ID to use. If not provided, a new
+              prefix will be created. Requires vpc_id to also be specified.
+            type: str
+            required: false
+          ip_block_id:
+            description: >
+              Optional IP block ID for VPC prefix allocation. If not provided,
+              uses the default from environment configuration.
+            type: str
+            required: false
+          instance_type_id:
+            description: >
+              Optional instance type ID to use for all nodes. If not provided,
+              uses the mapping from template_instance_type_mappings based on
+              the resource class.
+            type: str
+            required: false
+          ssh_key_group_id:
+            description: >
+              Optional SSH key group ID to use for instance provisioning. If not
+              provided, uses the default from environment configuration
+              (NVIDIA_BMM_SSH_KEY_GROUP_ID).
+            type: str
+            required: false
+
+

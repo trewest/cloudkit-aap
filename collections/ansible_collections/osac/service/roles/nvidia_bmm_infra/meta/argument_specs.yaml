@@ -1,0 +1,42 @@
+---
+argument_specs:
+  main:
+    short_description: Manage NVIDIA BMM infrastructure for cluster deployment
+    description:
+      - This role provisions or destroys NVIDIA Bare Metal Manager infrastructure
+      - for OpenShift cluster deployments. It creates VPCs, VPC prefixes, and
+      - instances based on the node requests in the ClusterOrder.
+    options:
+      nvidia_bmm_infra_state:
+        description: Desired state of the infrastructure (present or absent)
+        type: str
+        required: false
+        default: present
+        choices:
+          - present
+          - absent
+      nvidia_bmm_infra_name:
+        description: Name identifier for the cluster infrastructure
+        type: str
+        required: true
+      nvidia_bmm_infra_namespace:
+        description: Kubernetes namespace for the cluster
+        type: str
+        required: true
+      nvidia_bmm_infra_node_requests:
+        description: List of node requests from ClusterOrder
+        type: list
+        elements: dict
+        required: true
+      nvidia_bmm_infra_wait:
+        description: Whether to wait for instances to be ready
+        type: bool
+        required: false
+        default: true
+      nvidia_bmm_infra_wait_timeout:
+        description: Timeout in seconds when waiting for instances
+        type: int
+        required: false
+        default: 1800
+
+

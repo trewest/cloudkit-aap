@@ -1,0 +1,134 @@
+---
+# Delete NVIDIA BMM infrastructure
+# This removes instances, VPC prefix, and VPC in reverse order
+# Only deletes VPC/prefix if they were created by this cluster (not pre-existing)
+
+- name: Set VPC and resource names
+  ansible.builtin.set_fact:
+    nvidia_bmm_vpc_name: "{{ nvidia_bmm_infra_vpc_name_prefix }}-{{ nvidia_bmm_infra_name }}"
+    nvidia_bmm_prefix_name: "prefix-{{ nvidia_bmm_infra_name }}"
+
+- name: Attempt to retrieve infrastructure details from ConfigMap
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: "nvidia-bmm-infra-{{ nvidia_bmm_infra_name }}"
+    namespace: "{{ nvidia_bmm_infra_namespace }}"
+  register: infra_configmap
+  ignore_errors: true
+
+- name: Extract stored infrastructure IDs if ConfigMap exists
+  when: infra_configmap.resources | length > 0
+  ansible.builtin.set_fact:
+    nvidia_bmm_vpc_id: "{{ infra_configmap.resources[0].data.vpc_id | default('') }}"
+    nvidia_bmm_vpc_prefix_id: "{{ infra_configmap.resources[0].data.vpc_prefix_id | default('') }}"
+    nvidia_bmm_stored_instance_ids: "{{ infra_configmap.resources[0].data.instance_ids | default('[]') | from_json }}"
+    nvidia_bmm_vpc_was_created: "{{ infra_configmap.resources[0].data.vpc_created | default('true') | bool }}"
+    nvidia_bmm_prefix_was_created: "{{ infra_configmap.resources[0].data.prefix_created | default('true') | bool }}"
+
+# Query instances by name pattern if ConfigMap doesn't exist
+- name: Query instances by name pattern
+  when: infra_configmap.resources | length == 0
+  block:
+    - name: Get all instances
+      nvidia.bare_metal.instance_info:
+        api_url: "{{ nvidia_bmm_api_url }}"
+        api_token: "{{ nvidia_bmm_api_token }}"
+        org: "{{ nvidia_bmm_org }}"
+        api_path_prefix: "{{ nvidia_bmm_api_path_prefix }}"
+      register: all_instances
+
+    - name: Filter instances by cluster name pattern
+      ansible.builtin.set_fact:
+        nvidia_bmm_stored_instance_ids: >-
+          {{ all_instances.resources
+             | default([])
+             | selectattr('name', 'defined')
+             | selectattr('name', 'search', nvidia_bmm_infra_instance_name_prefix ~ '-' ~ nvidia_bmm_infra_name ~ '-')
+             | map(attribute='id')
+             | list }}
+        nvidia_bmm_vpc_was_created: true
+        nvidia_bmm_prefix_was_created: true
+
+    - name: Display matched instances
+      ansible.builtin.debug:
+        msg: "Found {{ nvidia_bmm_stored_instance_ids | length }} instance(s) matching pattern '{{ nvidia_bmm_infra_instance_name_prefix }}-{{ nvidia_bmm_infra_name }}-*'"
+
+- name: Display instances to be deleted
+  ansible.builtin.debug:
+    msg: "Will delete {{ nvidia_bmm_stored_instance_ids | default([]) | length }} instance(s)"
+
+# Delete instances first (always delete instances created for this cluster)
+- name: Delete instances
+  nvidia.bare_metal.instance:
+    state: absent
+    id: "{{ instance_id }}"
+    wait: true
+    wait_timeout: "{{ nvidia_bmm_infra_wait_timeout }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix }}"
+  loop: "{{ nvidia_bmm_stored_instance_ids | default([]) }}"
+  loop_control:
+    loop_var: instance_id
+    label: "Deleting instance {{ instance_id }}"
+  ignore_errors: true
+  register: instance_delete_results
+
+- name: Report instance deletion failures
+  ansible.builtin.debug:
+    msg: "Warning: Some instances may not have been deleted cleanly"
+  when: instance_delete_results.results | selectattr('failed', 'defined') | selectattr('failed') | list | length > 0
+
+# Delete VPC prefix only if it was created by this cluster
+- name: Delete VPC prefix (only if created by this cluster)
+  nvidia.bare_metal.vpc_prefix:
+    state: absent
+    name: "{{ nvidia_bmm_prefix_name }}"
+    vpc_id: "{{ nvidia_bmm_vpc_id | default(omit) }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix }}"
+  ignore_errors: true
+  when:
+    - nvidia_bmm_prefix_was_created | default(true)
+    - nvidia_bmm_vpc_id is defined and nvidia_bmm_vpc_id | length > 0
+
+- name: Skip VPC prefix deletion (using existing prefix)
+  ansible.builtin.debug:
+    msg: "Skipping VPC prefix deletion - using pre-existing prefix"
+  when: not (nvidia_bmm_prefix_was_created | default(true))
+
+# Delete VPC only if it was created by this cluster
+- name: Delete VPC (only if created by this cluster)
+  nvidia.bare_metal.vpc:
+    state: absent
+    name: "{{ nvidia_bmm_vpc_name }}"
+    site_id: "{{ nvidia_bmm_site_id }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix }}"
+  ignore_errors: true
+  when: nvidia_bmm_vpc_was_created | default(true)
+
+- name: Skip VPC deletion (using existing VPC)
+  ansible.builtin.debug:
+    msg: "Skipping VPC deletion - using pre-existing VPC"
+  when: not (nvidia_bmm_vpc_was_created | default(true))
+
+# Delete the infrastructure ConfigMap
+- name: Delete infrastructure ConfigMap
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: ConfigMap
+    name: "nvidia-bmm-infra-{{ nvidia_bmm_infra_name }}"
+    namespace: "{{ nvidia_bmm_infra_namespace }}"
+  ignore_errors: true
+
+- name: Infrastructure deletion complete
+  ansible.builtin.debug:
+    msg: "NVIDIA BMM infrastructure for {{ nvidia_bmm_infra_name }} has been deleted"

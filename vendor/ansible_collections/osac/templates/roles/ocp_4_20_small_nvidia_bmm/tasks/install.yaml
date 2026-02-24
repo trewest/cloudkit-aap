@@ -1,0 +1,60 @@
+---
+# Install tasks for OpenShift 4.17 cluster on NVIDIA BMM infrastructure
+# This template uses NVIDIA Bare Metal Manager for instance provisioning
+
+- name: Set OCP release image from template parameters if provided
+  ansible.builtin.set_fact:
+    ocp_release_image: "{{ template_parameters.ocp_release_image }}"
+  when: template_parameters.ocp_release_image is defined and template_parameters.ocp_release_image | length > 0
+
+- name: Create hosted cluster
+  ansible.builtin.import_role:
+    name: osac.service.hosted_cluster
+  vars:
+    hosted_cluster_name: "{{ cluster_order.metadata.name }}"
+    hosted_cluster_namespace: "{{ cluster_working_namespace }}"
+    hosted_cluster_settings:
+      ocp_release_image: "{{ ocp_release_image }}"
+      pull_secret: "{{ template_parameters.pull_secret }}"
+      ssh_public_key: "{{ template_parameters.ssh_public_key }}"
+    hosted_cluster_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
+    hosted_cluster_state: present
+
+- name: Create cluster infrastructure using NVIDIA BMM
+  ansible.builtin.import_role:
+    name: osac.service.nvidia_bmm_infra
+  vars:
+    nvidia_bmm_infra_state: present
+    nvidia_bmm_infra_name: "{{ cluster_order.metadata.name }}"
+    nvidia_bmm_infra_namespace: "{{ cluster_working_namespace }}"
+    nvidia_bmm_infra_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
+    # Instance type mappings defined in this template's defaults/main.yaml
+    nvidia_bmm_instance_type_mappings: "{{ template_instance_type_mappings }}"
+    # Optional: use existing VPC/prefix if provided in template_parameters
+    nvidia_bmm_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
+    nvidia_bmm_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"
+    nvidia_bmm_infra_ip_block_id: "{{ template_parameters.ip_block_id | default('') }}"
+    # Optional: override instance type and SSH key group
+    nvidia_bmm_infra_instance_type_id: "{{ template_parameters.instance_type_id | default('') }}"
+    nvidia_bmm_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
+
+# Note: For NVIDIA BMM, external access may need different handling than ESI
+# The instances get IPs from the VPC prefix; additional port forwarding
+# may be needed depending on network topology
+# - name: Configure external access
+#   ansible.builtin.import_role:
+#     name: osac.service.external_access
+#   vars:
+#     external_access_name: "{{ cluster_order.metadata.name }}"
+#     external_access_state: present
+#     external_access_namespace: "{{ cluster_working_namespace }}"
+#     external_access_ingress_internal_network: "{{ nvidia_bmm_vpc_name | default('osac-vpc-' + cluster_order.metadata.name) }}"
+
+- name: Retrieve kubeconfig
+  ansible.builtin.include_role:
+    name: osac.service.retrieve_kubeconfig
+  vars:
+    retrieve_kubeconfig_cluster_name: "{{ cluster_order.metadata.name }}"
+    retrieve_kubeconfig_namespace: "{{ cluster_working_namespace }}"
+
+

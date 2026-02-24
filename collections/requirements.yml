@@ -1,6 +1,9 @@
 collections:
   - name: kubernetes.core
     version: 5.2.0
+  - name: nvidia.bare_metal
+    source: https://github.com/fabiendupont/nvidia-bare-metal-manager-ansible.git
+    type: git
   - name: openstack.cloud
     version: 2.4.1
   - name: amazon.aws
@@ -21,7 +24,8 @@ collections:
     version: "3.4.1"
   - name: osac.templates
     type: git
-    source: https://github.com/osac-project/osac-templates
+    source: https://github.com/trewest/osac-templates
+    version: 0.0.2
   - name: osac.massopencloud
     type: git
     source: https://github.com/osac-project/osac-massopencloud-templates

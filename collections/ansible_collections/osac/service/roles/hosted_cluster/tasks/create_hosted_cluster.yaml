@@ -11,7 +11,7 @@
       data:
         .dockerconfigjson: "{{ hosted_cluster_settings.pull_secret | to_json | b64encode }}"
       type: kubernetes.io/dockerconfigjson
-  no_log: true
+  no_log: false
 
 - name: Create Secret resource containing ssh public key
   kubernetes.core.k8s:
@@ -72,10 +72,27 @@
               type: Route
           - service: Ignition
             servicePublishingStrategy:
-              type: Route
-        controllerAvailabilityPolicy: HighlyAvailable
-        infrastructureAvailabilityPolicy: HighlyAvailable
+              type: NodePort
+              nodePort:
+                address: "{{ hosted_cluster_nodeport_address | default(lookup('env', 'HOSTED_CLUSTER_NODEPORT_ADDRESS'), true) }}"
+        controllerAvailabilityPolicy: SingleReplica
+        infrastructureAvailabilityPolicy: SingleReplica
         olmCatalogPlacement: management
+
+- name: Create pull secret in agent namespace for InfraEnv
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "pullsecret-cluster-{{ hosted_cluster_name }}"
+        namespace: "{{ hosted_cluster_default_agent_namespace }}"
+        labels: "{{ hosted_cluster_default_cluster_order_label }}"
+      data:
+        .dockerconfigjson: "{{ hosted_cluster_settings.pull_secret | to_json | b64encode }}"
+      type: kubernetes.io/dockerconfigjson
+  no_log: false
 
 - name: Set nodepool prefix
   ansible.builtin.set_fact:

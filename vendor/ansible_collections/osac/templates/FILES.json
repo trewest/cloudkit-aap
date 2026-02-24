@@ -64,27 +64,6 @@
    "format": 1
   },
   {
-   "name": "CHANGELOG.rst",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "e621f14c513ad56371bf1d16c3a9151489c56327b3628bdd9489af5f2da0ca46",
-   "format": 1
-  },
-  {
-   "name": "LICENSE",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "e18d498d8a07d4abcf0979ece2608a4f38d8967aee98178ecf151ab6ca3ceaa6",
-   "format": 1
-  },
-  {
-   "name": "README.md",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "dc25e6f5c4019a3b7eb9c36dfac5b4c01a23753f0ccef0b2eaa9d1474a951899",
-   "format": 1
-  },
-  {
    "name": "meta",
    "ftype": "dir",
    "chksum_type": null,
@@ -169,6 +148,13 @@
    "format": 1
   },
   {
+   "name": "roles/ocp_4_17_small/tasks/post_install.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "e54360a3d9e22e601e223bf7cc13be21a40a6227f3ae2bd9e0c65f21f4fae345",
+   "format": 1
+  },
+  {
    "name": "roles/ocp_4_17_small/tasks/delete.yaml",
    "ftype": "file",
    "chksum_type": "sha256",
@@ -180,13 +166,6 @@
    "ftype": "file",
    "chksum_type": "sha256",
    "chksum_sha256": "8d59aa47db8eb325e22210a3a7699f6e438ba7b363bae21b6494429c7cc17fde",
-   "format": 1
-  },
-  {
-   "name": "roles/ocp_4_17_small/tasks/post_install.yaml",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "e54360a3d9e22e601e223bf7cc13be21a40a6227f3ae2bd9e0c65f21f4fae345",
    "format": 1
   },
   {
@@ -320,6 +299,90 @@
    "ftype": "file",
    "chksum_type": "sha256",
    "chksum_sha256": "1dd08fcfcd11d270a91b707e60ddd794179da2017f6627766e8467bcf40cb541",
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/defaults",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/defaults/main.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "b2805d821caa172ceafc857c6ddbbfeb2260e2c61c32ec758000cda024bedf16",
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/meta",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/meta/argument_specs.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "f5fc933e413a3a80256a15f96fcf5477274311028fff7e51a7c1a904e1442fc7",
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/meta/osac.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "7cba5b9da901a454f3a42701e19c4560adad77fd5f4d9ee0abdfdd0fb76d1a2b",
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/tasks",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/tasks/delete.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "8eaf384808ca5a3f9ef5ac8f12575a829c024a3f86f2ebe6f3c909575c692968",
+   "format": 1
+  },
+  {
+   "name": "roles/ocp_4_20_small_nvidia_bmm/tasks/install.yaml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "0c76b7cbbbee1a6fcd177b07db575a8b96718f1481b124d78ab8682255cc4717",
+   "format": 1
+  },
+  {
+   "name": "CHANGELOG.rst",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "e621f14c513ad56371bf1d16c3a9151489c56327b3628bdd9489af5f2da0ca46",
+   "format": 1
+  },
+  {
+   "name": "LICENSE",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "e18d498d8a07d4abcf0979ece2608a4f38d8967aee98178ecf151ab6ca3ceaa6",
+   "format": 1
+  },
+  {
+   "name": "README.md",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "dc25e6f5c4019a3b7eb9c36dfac5b4c01a23753f0ccef0b2eaa9d1474a951899",
    "format": 1
   }
  ],

@@ -1,0 +1,36 @@
+---
+# Delete tasks for OpenShift 4.17 cluster on NVIDIA BMM infrastructure
+# This cleans up all resources in reverse order
+
+- name: Delete external access configuration
+  ansible.builtin.import_role:
+    name: osac.service.external_access
+  vars:
+    external_access_name: "{{ cluster_order.metadata.name }}"
+    external_access_state: absent
+    external_access_namespace: "{{ cluster_working_namespace }}"
+  ignore_errors: true
+
+- name: Delete hosted cluster
+  ansible.builtin.import_role:
+    name: osac.service.hosted_cluster
+  vars:
+    hosted_cluster_name: "{{ cluster_order.metadata.name }}"
+    hosted_cluster_namespace: "{{ cluster_working_namespace }}"
+    hosted_cluster_state: absent
+  ignore_errors: true
+
+- name: Delete NVIDIA BMM infrastructure
+  ansible.builtin.import_role:
+    name: osac.service.nvidia_bmm_infra
+  vars:
+    nvidia_bmm_infra_state: absent
+    nvidia_bmm_infra_name: "{{ cluster_order.metadata.name }}"
+    nvidia_bmm_infra_namespace: "{{ cluster_working_namespace }}"
+    nvidia_bmm_infra_node_requests: "{{ cluster_order.spec.nodeRequests | default([]) | unique(attribute='resourceClass') }}"
+
+- name: Cluster deletion complete
+  ansible.builtin.debug:
+    msg: "OpenShift cluster {{ cluster_order.metadata.name }} and NVIDIA BMM infrastructure have been deleted"
+
+

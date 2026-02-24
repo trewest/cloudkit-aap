@@ -1,0 +1,28 @@
+# Define the display name and description of the template
+title: Simple OpenShift 4.20 Cluster (NVIDIA BMM)
+description: >
+  This template will build a minimally configured OpenShift 4.20 cluster
+  using NVIDIA Bare Metal Manager for infrastructure provisioning.
+  Instances are provisioned on-demand from the NVIDIA BMM platform.
+
+# Infrastructure provider for this template
+infrastructure_provider: nvidia_bmm
+
+# This sets the nodeRequest field in the ClusterOrder manifest. There must be at
+# least one entry in this list.
+# Note: resourceClass values must have corresponding entries in
+# template_instance_type_mappings in this template's defaults
+default_node_request:
+- resourceClass: dgx
+  numberOfNodes: 2
+
+# This declares that for a cluster built from this template, only the resource
+# classes listed here may be used when requesting additional nodes. If this
+# list is empty or unspecified, a ClusterOrder may request nodes from any
+# available resource class.
+allowed_resource_classes:
+  - dgx
+  - gpu_small
+  - gpu_large
+
+

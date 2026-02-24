@@ -1,0 +1,15 @@
+---
+# Default OpenShift release image for 4.20
+# This can be overridden via template_parameters.ocp_release_image
+ocp_release_image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
+
+# Instance type mappings for this template
+# Maps resource class names to NVIDIA BMM instance type IDs
+# These can be UUIDs or instance type names (names will be looked up)
+template_instance_type_mappings:
+  dgx: "f3d15b05-41ad-4acf-8458-1bbca78d603b"
+  # Add more mappings as needed for this template:
+  # gpu_small: "instance-type-uuid-for-small-gpu"
+  # gpu_large: "instance-type-uuid-for-large-gpu"
+
+
