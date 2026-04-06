@@ -1,0 +1,36 @@
+---
+# This file orchestrates BGP resource creation for Carbide-backed hosted clusters.
+# It discovers BGP parameters from worker nodes and creates MetalLB BGP resources.
+
+- name: Discover BGP parameters from worker nodes
+  ansible.builtin.include_tasks: discover_bgp_params.yml
+
+- name: Create BGPAdvertisement resource
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+    definition: "{{ lookup('template', 'bgp_advertisement.yaml.j2') }}"
+  register: metallb_bgp_advertisement
+  # Retry with same pattern as IPAddressPool (webhook may not be active yet)
+  until: metallb_bgp_advertisement is successful
+  retries: 60
+  delay: 10
+
+- name: Create BGPPeer resources for each worker node
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+    definition: "{{ lookup('template', 'bgp_peer.yaml.j2') }}"
+  loop: "{{ worker_bgp_params }}"
+  loop_control:
+    loop_var: worker
+    label: "{{ worker.hostname }}"
+  register: metallb_bgp_peers
+  # Retry with same pattern as BGPAdvertisement
+  until: metallb_bgp_peers is successful
+  retries: 60
+  delay: 10
+
+- name: Log BGP configuration summary
+  ansible.builtin.debug:
+    msg: "Created BGPAdvertisement and {{ worker_bgp_params | length }} BGPPeer resources for workers: {{ worker_bgp_params | map(attribute='hostname') | list }}"
