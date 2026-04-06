@@ -1,0 +1,138 @@
+---
+# This file discovers BGP parameters (gateway IP and peer ASN) from worker nodes
+# for configuring MetalLB BGPPeer resources in Carbide-backed hosted clusters.
+
+- name: Get worker nodes from hosted cluster
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+    label_selectors:
+      - "node-role.kubernetes.io/worker"
+  register: worker_nodes_info
+
+- name: Fail if no worker nodes found
+  ansible.builtin.fail:
+    msg: "No worker nodes found in hosted cluster. Cannot configure BGP."
+  when: worker_nodes_info.resources | length == 0
+
+- name: Wait for worker nodes to be Ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+    name: "{{ item.metadata.name }}"
+    kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  loop: "{{ worker_nodes_info.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: Initialize worker BGP parameters list
+  ansible.builtin.set_fact:
+    worker_bgp_params: []
+
+- name: Discover BGP parameters for each worker node
+  block:
+    - name: Discover default gateway on worker node
+      kubernetes.core.k8s_exec:
+        kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+        namespace: default
+        pod: "debug-{{ item.metadata.name }}"
+        command: chroot /host ip route show default
+      register: gateway_result
+      retries: 3
+      delay: 5
+      until: gateway_result is successful and gateway_result.stdout | length > 0
+      loop: "{{ worker_nodes_info.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      ignore_errors: yes
+
+    - name: Extract gateway IP from route output
+      ansible.builtin.set_fact:
+        worker_gateway_map: >-
+          {{
+            worker_gateway_map | default({}) | combine({
+              item.item.metadata.name: (item.stdout | regex_search('default via (\\S+)', '\\1') | first)
+            })
+          }}
+      loop: "{{ gateway_result.results }}"
+      loop_control:
+        label: "{{ item.item.metadata.name }}"
+      when: item is successful and item.stdout | length > 0
+
+    - name: Discover peer ASN from Carbide metadata service
+      kubernetes.core.k8s_exec:
+        kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
+        namespace: default
+        pod: "debug-{{ item.metadata.name }}"
+        command: chroot /host curl -s --max-time 10 http://169.254.169.254:7777/latest/meta-data/asn
+      register: asn_result
+      retries: 3
+      delay: 5
+      until: asn_result is successful and asn_result.stdout | length > 0
+      loop: "{{ worker_nodes_info.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      ignore_errors: yes
+
+    - name: Extract peer ASN from metadata service response
+      ansible.builtin.set_fact:
+        worker_asn_map: >-
+          {{
+            worker_asn_map | default({}) | combine({
+              item.item.metadata.name: (item.stdout | int)
+            })
+          }}
+      loop: "{{ asn_result.results }}"
+      loop_control:
+        label: "{{ item.item.metadata.name }}"
+      when: item is successful and item.stdout | length > 0 and item.stdout | int >= 1
+
+    - name: Build worker BGP parameters list
+      ansible.builtin.set_fact:
+        worker_bgp_params: >-
+          {{
+            worker_bgp_params + [{
+              'hostname': item.metadata.name,
+              'gateway': worker_gateway_map[item.metadata.name],
+              'peer_asn': worker_asn_map[item.metadata.name]
+            }]
+          }}
+      loop: "{{ worker_nodes_info.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when:
+        - item.metadata.name in worker_gateway_map
+        - item.metadata.name in worker_asn_map
+
+  rescue:
+    - name: Fail with clear error message
+      ansible.builtin.fail:
+        msg: "Failed to discover BGP parameters for worker nodes. Gateway discovery or ASN metadata service may be unreachable."
+
+- name: Validate discovered BGP parameters
+  ansible.builtin.assert:
+    that:
+      - worker_bgp_params | length == worker_nodes_info.resources | length
+      - worker_bgp_params | length > 0
+    fail_msg: "BGP parameter discovery incomplete. Expected {{ worker_nodes_info.resources | length }} workers, discovered {{ worker_bgp_params | length }}."
+    success_msg: "Discovered BGP parameters for {{ worker_bgp_params | length }} workers."
+
+- name: Validate peer ASN values are in valid range
+  ansible.builtin.assert:
+    that:
+      - item.peer_asn | int >= 1
+      - item.peer_asn | int <= 4294967295
+    fail_msg: "Invalid peer ASN {{ item.peer_asn }} for worker {{ item.hostname }}. ASN must be between 1 and 4294967295."
+  loop: "{{ worker_bgp_params }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+
+- name: Log discovered BGP parameters summary
+  ansible.builtin.debug:
+    msg: "Discovered BGP parameters for {{ worker_bgp_params | length }} workers: {{ worker_bgp_params }}"
