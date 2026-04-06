@@ -1,0 +1,159 @@
+---
+# Create instances for a specific resource class
+# This task file is included from create_instances.yaml
+
+# Determine instance type: use override if provided, otherwise use mapping
+- name: "{{ node_request.resourceClass }} - Check for instance type override"
+  ansible.builtin.set_fact:
+    use_instance_type_override: "{{ carbide_infra_instance_type_id is defined and carbide_infra_instance_type_id | length > 0 }}"
+
+- name: "{{ node_request.resourceClass }} - Use instance type override"
+  ansible.builtin.set_fact:
+    current_instance_type_id: "{{ carbide_infra_instance_type_id }}"
+  when: use_instance_type_override
+
+# If no override, use the resource class mapping
+- name: "{{ node_request.resourceClass }} - Resolve instance type from mapping"
+  when: not use_instance_type_override
+  block:
+    - name: "{{ node_request.resourceClass }} - Get instance type mapping"
+      ansible.builtin.set_fact:
+        current_instance_type_value: "{{ carbide_instance_type_mappings[node_request.resourceClass] | default('') }}"
+
+    - name: "{{ node_request.resourceClass }} - Validate instance type mapping exists"
+      ansible.builtin.assert:
+        that:
+          - current_instance_type_value | length > 0
+        fail_msg: >
+          No instance type mapping found for resource class '{{ node_request.resourceClass }}'.
+          Please configure carbide_instance_type_mappings in template defaults or provide
+          carbide_infra_instance_type_id in template_parameters.
+
+    # Check if the value looks like a UUID or is a name
+    - name: "{{ node_request.resourceClass }} - Determine if mapping is ID or name"
+      ansible.builtin.set_fact:
+        instance_type_is_uuid: "{{ current_instance_type_value is regex('^[0-9a-fA-F-]{36}$') }}"
+
+    # If it's already a UUID, use it directly
+    - name: "{{ node_request.resourceClass }} - Use instance type ID directly"
+      ansible.builtin.set_fact:
+        current_instance_type_id: "{{ current_instance_type_value }}"
+      when: instance_type_is_uuid
+
+    # If it's a name, look up the ID
+    - name: "{{ node_request.resourceClass }} - Look up instance type by name"
+      when: not instance_type_is_uuid
+      block:
+        - name: "{{ node_request.resourceClass }} - Query instance type by name"
+          nvidia.bare_metal.instance_type_info:
+            name: "{{ current_instance_type_value }}"
+            api_url: "{{ nvidia_bmm_api_url }}"
+            api_token: "{{ nvidia_bmm_api_token }}"
+            org: "{{ nvidia_bmm_org }}"
+            api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+          register: instance_type_lookup
+
+        - name: "{{ node_request.resourceClass }} - Validate instance type was found"
+          ansible.builtin.assert:
+            that:
+              - instance_type_lookup.resource is defined
+              - instance_type_lookup.resource.id is defined
+            fail_msg: >
+              Instance type '{{ current_instance_type_value }}' not found in Carbide.
+              Please verify the instance type name or use the UUID directly.
+
+        - name: "{{ node_request.resourceClass }} - Set instance type ID from lookup"
+          ansible.builtin.set_fact:
+            current_instance_type_id: "{{ instance_type_lookup.resource.id }}"
+
+- name: "{{ node_request.resourceClass }} - Display resolved instance type"
+  ansible.builtin.debug:
+    msg: "Using instance type ID: {{ current_instance_type_id }}"
+
+# Determine SSH key group: use override if provided, otherwise use default
+- name: "{{ node_request.resourceClass }} - Resolve SSH key group ID"
+  ansible.builtin.set_fact:
+    carbide_effective_ssh_key_group_id: "{{ carbide_infra_ssh_key_group_id if (carbide_infra_ssh_key_group_id is defined and carbide_infra_ssh_key_group_id | length > 0) else nvidia_bmm_default_ssh_key_group_id }}"
+
+- name: "{{ node_request.resourceClass }} - Display SSH key group"
+  ansible.builtin.debug:
+    msg: "Using SSH key group ID: {{ carbide_effective_ssh_key_group_id }}"
+
+- name: "{{ node_request.resourceClass }} - Check if using batch or individual provisioning"
+  ansible.builtin.set_fact:
+    use_batch_provisioning: "{{ (node_request.numberOfNodes | int) > 1 and carbide_infra_topology_optimized }}"
+
+- name: "{{ node_request.resourceClass }} - Batch provision instances"
+  when: use_batch_provisioning
+  block:
+    - name: "{{ node_request.resourceClass }} - Create instances using batch API"
+      nvidia.bare_metal.instance_batch:
+        name_prefix: "{{ carbide_infra_instance_name_prefix }}-{{ carbide_infra_name }}-{{ node_request.resourceClass }}"
+        count: "{{ node_request.numberOfNodes | int }}"
+        tenant_id: "{{ nvidia_bmm_tenant_id }}"
+        instance_type_id: "{{ current_instance_type_id }}"
+        vpc_id: "{{ carbide_vpc_id }}"
+        operating_system_id: "{{ nvidia_bmm_default_operating_system_id }}"
+        ipxe_script: "{{ carbide_ipxe_script }}"
+        interfaces:
+          - vpc_prefix_id: "{{ carbide_vpc_prefix_id }}"
+            is_physical: true
+        ssh_key_group_ids:
+          - "{{ carbide_effective_ssh_key_group_id }}"
+        labels:
+          managed-by: osac
+          provider: carbide
+          cluster: "{{ carbide_infra_name }}"
+          resource_class: "{{ node_request.resourceClass }}"
+        topology_optimized: "{{ carbide_infra_topology_optimized }}"
+        api_url: "{{ nvidia_bmm_api_url }}"
+        api_token: "{{ nvidia_bmm_api_token }}"
+        org: "{{ nvidia_bmm_org }}"
+        api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+      register: batch_instance_result
+
+    - name: "{{ node_request.resourceClass }} - Collect batch instance IDs"
+      ansible.builtin.set_fact:
+        carbide_all_instance_ids: "{{ carbide_all_instance_ids | default([]) + (batch_instance_result.resources | map(attribute='id') | list) }}"
+
+- name: "{{ node_request.resourceClass }} - Individual instance provisioning"
+  when: not use_batch_provisioning
+  block:
+    - name: "{{ node_request.resourceClass }} - Create individual instances"
+      nvidia.bare_metal.instance:
+        state: present
+        name: "{{ carbide_infra_instance_name_prefix }}-{{ carbide_infra_name }}-{{ node_request.resourceClass }}-{{ instance_index }}"
+        tenant_id: "{{ nvidia_bmm_tenant_id }}"
+        instance_type_id: "{{ current_instance_type_id }}"
+        vpc_id: "{{ carbide_vpc_id }}"
+        operating_system_id: "{{ nvidia_bmm_default_operating_system_id }}"
+        ipxe_script: "{{ carbide_ipxe_script }}"
+        interfaces:
+          - vpc_prefix_id: "{{ carbide_vpc_prefix_id }}"
+            is_physical: true
+        ssh_key_group_ids:
+          - "{{ carbide_effective_ssh_key_group_id }}"
+        labels:
+          managed-by: osac
+          provider: carbide
+          cluster: "{{ carbide_infra_name }}"
+          resource_class: "{{ node_request.resourceClass }}"
+        wait: "{{ carbide_infra_wait }}"
+        wait_timeout: "{{ carbide_infra_wait_timeout }}"
+        api_url: "{{ nvidia_bmm_api_url }}"
+        api_token: "{{ nvidia_bmm_api_token }}"
+        org: "{{ nvidia_bmm_org }}"
+        api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+      loop: "{{ range(node_request.numberOfNodes | int) | list }}"
+      loop_control:
+        loop_var: instance_index
+        label: "Instance {{ instance_index + 1 }} of {{ node_request.numberOfNodes }}"
+      register: individual_instance_results
+
+    - name: "{{ node_request.resourceClass }} - Collect individual instance IDs"
+      ansible.builtin.set_fact:
+        carbide_all_instance_ids: "{{ carbide_all_instance_ids | default([]) + (individual_instance_results.results | map(attribute='resource') | map(attribute='id') | list) }}"
+
+- name: "{{ node_request.resourceClass }} - Display provisioned instance count"
+  ansible.builtin.debug:
+    msg: "Provisioned {{ node_request.numberOfNodes }} instance(s) for resource class {{ node_request.resourceClass }}"
