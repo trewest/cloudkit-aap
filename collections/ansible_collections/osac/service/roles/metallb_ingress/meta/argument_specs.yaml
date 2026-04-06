@@ -5,6 +5,20 @@ argument_specs:
       metallb_ingress_admin_kubeconfig:
         type: str
         required: true
+        description: Kubeconfig for hosted cluster (where MetalLB resources are created)
       metallb_ingress_ip:
         type: str
         required: true
+        description: Pre-allocated IP address for MetalLB ingress (output from IP allocation)
+      ingress_cidr_range:
+        type: str
+        required: true
+        description: CIDR range for IP allocation (e.g., "192.168.100.0/24")
+      cluster_name:
+        type: str
+        required: true
+        description: Cluster name for IP registry tracking and idempotent allocation
+      hub_kubeconfig:
+        type: str
+        required: true
+        description: Kubeconfig for hub cluster (where IP registry ConfigMap lives)
