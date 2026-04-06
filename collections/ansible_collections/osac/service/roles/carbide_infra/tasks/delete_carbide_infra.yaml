@@ -1,0 +1,92 @@
+---
+# Delete Carbide VPC and prefix in reverse creation order
+# Only deletes resources that were created by this cluster (per ConfigMap flags)
+
+- name: Set expected resource names
+  ansible.builtin.set_fact:
+    carbide_vpc_name: "{{ carbide_infra_vpc_name_prefix }}-{{ carbide_infra_name }}"
+    carbide_prefix_name: "prefix-{{ carbide_infra_name }}"
+
+- name: Retrieve infrastructure state from ConfigMap
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: "carbide-infra-{{ carbide_infra_name }}"
+    namespace: "{{ carbide_infra_namespace }}"
+  register: carbide_infra_configmap
+  ignore_errors: true  # ConfigMap may not exist (manual deletion, etc.)
+
+- name: Extract VPC and prefix state if ConfigMap exists
+  when: carbide_infra_configmap.resources | length > 0
+  ansible.builtin.set_fact:
+    carbide_vpc_id: "{{ carbide_infra_configmap.resources[0].data.vpc_id | default('') }}"
+    carbide_vpc_prefix_id: "{{ carbide_infra_configmap.resources[0].data.vpc_prefix_id | default('') }}"
+    carbide_vpc_was_created: "{{ carbide_infra_configmap.resources[0].data.vpc_created | default('true') | bool }}"
+    carbide_prefix_was_created: "{{ carbide_infra_configmap.resources[0].data.prefix_created | default('true') | bool }}"
+
+- name: Set default flags if ConfigMap missing
+  when: carbide_infra_configmap.resources | length == 0
+  ansible.builtin.set_fact:
+    carbide_vpc_id: ""
+    carbide_vpc_prefix_id: ""
+    carbide_vpc_was_created: true  # Default to delete if unknown state
+    carbide_prefix_was_created: true  # Default to delete if unknown state
+
+- name: Display deletion plan
+  ansible.builtin.debug:
+    msg: >
+      Deletion plan: VPC prefix: {{ 'delete' if carbide_prefix_was_created else 'skip (pre-existing)' }},
+      VPC: {{ 'delete' if carbide_vpc_was_created else 'skip (pre-existing)' }}
+
+# Delete VPC prefix only if created by this cluster
+- name: Delete VPC prefix (only if created by this cluster)
+  when:
+    - carbide_prefix_was_created | default(true) | bool
+    - carbide_vpc_id is defined
+    - carbide_vpc_id | length > 0
+  nvidia.bare_metal.vpc_prefix:
+    state: absent
+    name: "{{ carbide_prefix_name }}"
+    vpc_id: "{{ carbide_vpc_id }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+  ignore_errors: true  # Prefix may have been manually deleted
+
+- name: Skip VPC prefix deletion (using pre-existing prefix)
+  when: not (carbide_prefix_was_created | default(true) | bool)
+  ansible.builtin.debug:
+    msg: "Skipping VPC prefix deletion - using pre-existing prefix per template parameters"
+
+# Delete VPC only if created by this cluster
+- name: Delete VPC (only if created by this cluster)
+  when: carbide_vpc_was_created | default(true) | bool
+  nvidia.bare_metal.vpc:
+    state: absent
+    name: "{{ carbide_vpc_name }}"
+    site_id: "{{ nvidia_bmm_site_id }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+  ignore_errors: true  # VPC may have been manually deleted
+
+- name: Skip VPC deletion (using pre-existing VPC)
+  when: not (carbide_vpc_was_created | default(true) | bool)
+  ansible.builtin.debug:
+    msg: "Skipping VPC deletion - using pre-existing VPC per template parameters"
+
+# Delete infrastructure ConfigMap
+- name: Delete infrastructure ConfigMap
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: ConfigMap
+    name: "carbide-infra-{{ carbide_infra_name }}"
+    namespace: "{{ carbide_infra_namespace }}"
+  ignore_errors: true
+
+- name: Carbide infrastructure deletion complete
+  ansible.builtin.debug:
+    msg: "Carbide infrastructure for {{ carbide_infra_name }} has been cleaned up"
