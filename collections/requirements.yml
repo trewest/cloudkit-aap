@@ -22,3 +22,6 @@ collections:
   - name: osac.massopencloud
     type: git
     source: https://github.com/osac-project/osac-massopencloud-templates
+  - name: nvidia.bare_metal
+    type: git
+    source: https://github.com/fabiendupont/nvidia-bare-metal-manager-ansible.git
