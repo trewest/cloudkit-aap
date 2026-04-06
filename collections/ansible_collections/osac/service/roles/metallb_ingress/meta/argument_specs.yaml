@@ -22,3 +22,11 @@ argument_specs:
         type: str
         required: true
         description: Kubeconfig for hub cluster (where IP registry ConfigMap lives)
+      infrastructure_provider:
+        type: str
+        required: false
+        description: Infrastructure provider type ('nvidia_bmm' triggers BGP mode, omit for L2 mode)
+      local_asn:
+        type: int
+        required: false
+        description: Local ASN for MetalLB BGP speaker (required when infrastructure_provider is 'nvidia_bmm')
