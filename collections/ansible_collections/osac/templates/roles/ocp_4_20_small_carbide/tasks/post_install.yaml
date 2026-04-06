@@ -1,0 +1,4 @@
+---
+# Post-installation tasks for OpenShift 4.20 cluster on Carbide infrastructure
+# This file is required by template structure but currently has no tasks
+# External access configuration (MetalLB) will be added in Phase 4

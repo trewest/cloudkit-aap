@@ -1,0 +1,36 @@
+---
+# Install tasks for OpenShift 4.20 cluster on Carbide infrastructure
+
+- name: Set OCP release image from template parameters if provided
+  ansible.builtin.set_fact:
+    ocp_release_image: "{{ template_parameters.ocp_release_image }}"
+  when: template_parameters.ocp_release_image is defined and template_parameters.ocp_release_image | length > 0
+
+- name: Create hosted cluster
+  ansible.builtin.import_role:
+    name: osac.service.hosted_cluster
+  vars:
+    hosted_cluster_name: "{{ cluster_order.metadata.name }}"
+    hosted_cluster_namespace: "{{ cluster_working_namespace }}"
+    hosted_cluster_settings:
+      ocp_release_image: "{{ ocp_release_image }}"
+      pull_secret: "{{ template_parameters.pull_secret }}"
+      ssh_public_key: "{{ template_parameters.ssh_public_key }}"
+    hosted_cluster_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
+    hosted_cluster_state: present
+
+- name: Create cluster infrastructure
+  ansible.builtin.import_role:
+    name: osac.service.cluster_infra
+  vars:
+    cluster_infra_name: "{{ cluster_order.metadata.name }}"
+    cluster_infra_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
+    # cluster_infra will route to carbide_infra based on infrastructure_provider from meta/osac.yaml
+    # (extracted by extract_template_info role, used in Plan 03 routing)
+
+- name: Retrieve kubeconfig
+  ansible.builtin.include_role:
+    name: osac.service.retrieve_kubeconfig
+  vars:
+    retrieve_kubeconfig_cluster_name: "{{ cluster_order.metadata.name }}"
+    retrieve_kubeconfig_namespace: "{{ cluster_working_namespace }}"

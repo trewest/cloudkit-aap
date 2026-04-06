@@ -1,0 +1,24 @@
+---
+# Delete tasks for OpenShift 4.20 cluster on Carbide infrastructure
+
+- name: Delete hosted cluster
+  ansible.builtin.import_role:
+    name: osac.service.hosted_cluster
+  vars:
+    hosted_cluster_name: "{{ cluster_order.metadata.name }}"
+    hosted_cluster_namespace: "{{ cluster_working_namespace }}"
+    hosted_cluster_state: absent
+  ignore_errors: true
+
+- name: Delete cluster infrastructure
+  ansible.builtin.import_role:
+    name: osac.service.cluster_infra
+    tasks_from: delete_cluster_infra
+  vars:
+    cluster_infra_name: "{{ cluster_order.metadata.name }}"
+    # cluster_infra routes to carbide_infra deletion (Plan 03)
+  ignore_errors: true
+
+- name: Cluster deletion complete
+  ansible.builtin.debug:
+    msg: "OpenShift cluster {{ cluster_order.metadata.name }} and Carbide infrastructure have been deleted"
