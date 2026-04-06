@@ -34,3 +34,8 @@ argument_specs:
         description: Carbide SSH key group ID (overrides default)
         type: str
         required: false
+      local_asn:
+        description: Local ASN for MetalLB BGP speaker (shared by all workers)
+        type: int
+        required: true
+        # Consult network team for correct ASN value (typically in private range 64512-65534)
