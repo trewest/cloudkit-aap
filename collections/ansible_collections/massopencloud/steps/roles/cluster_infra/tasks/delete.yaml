@@ -5,9 +5,23 @@
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
 
-- name: Delete cluster network
+# Backend routing: ESI or Carbide based on infrastructure_provider
+
+- name: Delete ESI cluster network
+  when: infrastructure_provider | default('esi') == 'esi'
   ansible.builtin.include_role:
     name: massopencloud.esi.network
   vars:
     network_suffix: "{{ cluster_infra_name }}"
     network_state: absent
+  ignore_errors: true
+
+- name: Delete Carbide cluster infrastructure
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.include_role:
+    name: osac.service.carbide_infra
+  vars:
+    carbide_infra_state: absent
+    carbide_infra_name: "{{ cluster_infra_name }}"
+    carbide_infra_namespace: "{{ cluster_working_namespace }}"
+  ignore_errors: true
