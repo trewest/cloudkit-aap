@@ -1,0 +1,99 @@
+---
+# NVIDIA Bare Metal Manager (Carbide) Configuration
+# =================================================
+# These settings configure the NVIDIA Carbide infrastructure provider for OSAC.
+#
+# SECURITY: NEVER commit actual secrets to this file!
+# All sensitive values MUST be provided via environment variables injected by
+# AAP from the cluster-fulfillment-ig Kubernetes Secret.
+#
+# The environment variables are:
+#   - NVIDIA_BMM_API_URL          - Carbide API endpoint
+#   - NVIDIA_BMM_CLIENT_ID         - OAuth2 client ID
+#   - NVIDIA_BMM_CLIENT_SECRET     - OAuth2 client secret
+#   - NVIDIA_BMM_ORG               - Organization identifier
+#   - NVIDIA_BMM_SITE_ID           - Site identifier
+#   - NVIDIA_BMM_TENANT_ID         - Tenant identifier
+#   - NVIDIA_BMM_SSA_TOKEN_URL     - SSA OAuth2 token endpoint
+#   - NVIDIA_BMM_API_PATH_PREFIX   - API path prefix (default: 'forge')
+#   - NVIDIA_BMM_OAUTH_SCOPE       - OAuth scope (optional)
+#   - NVIDIA_BMM_DEFAULT_IP_BLOCK_ID - Default IP block for VPC prefixes (optional)
+#   - NVIDIA_BMM_SSH_KEY_GROUP_ID  - Default SSH key group (optional)
+#   - NVIDIA_BMM_DEFAULT_OS_ID     - Default operating system ID (optional)
+
+# API Connection Settings
+# -----------------------
+# Base URL for the Carbide API (e.g., https://carbide.example.com)
+nvidia_bmm_api_url: "{{ lookup('env', 'NVIDIA_BMM_API_URL') | default('', true) }}"
+
+# API path prefix (typically 'forge' for Carbide)
+nvidia_bmm_api_path_prefix: "{{ lookup('env', 'NVIDIA_BMM_API_PATH_PREFIX') | default('forge', true) }}"
+
+# OAuth2 Client Credentials Flow Configuration
+# --------------------------------------------
+# Carbide uses OAuth2 client credentials flow for authentication.
+# These credentials are exchanged for a JWT token via the SSA token endpoint.
+nvidia_bmm_client_id: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_ID') | default('', true) }}"
+nvidia_bmm_client_secret: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_SECRET') | default('', true) }}"
+nvidia_bmm_ssa_token_url: "{{ lookup('env', 'NVIDIA_BMM_SSA_TOKEN_URL') | default('', true) }}"
+
+# Optional OAuth scope (leave empty for default)
+nvidia_bmm_oauth_scope: "{{ lookup('env', 'NVIDIA_BMM_OAUTH_SCOPE') | default('', true) }}"
+
+# Multi-tenancy Configuration
+# ---------------------------
+# Carbide's multi-tenant model requires org, site, and tenant identifiers.
+# These values scope API operations to the correct tenant and datacenter.
+nvidia_bmm_org: "{{ lookup('env', 'NVIDIA_BMM_ORG') | default('', true) }}"
+nvidia_bmm_site_id: "{{ lookup('env', 'NVIDIA_BMM_SITE_ID') | default('', true) }}"
+nvidia_bmm_tenant_id: "{{ lookup('env', 'NVIDIA_BMM_TENANT_ID') | default('', true) }}"
+
+# Network Configuration
+# ---------------------
+# Network virtualization type - "FNN" (Fully Networked Nodes) for Carbide VPC support
+nvidia_bmm_network_virtualization_type: "FNN"
+
+# Default VPC prefix length (CIDR bits)
+nvidia_bmm_default_prefix_length: 24
+
+# Default IP block for VPC prefix allocation (optional fallback)
+nvidia_bmm_default_ip_block_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_IP_BLOCK_ID') | default('', true) }}"
+
+# Instance Provisioning Defaults
+# ------------------------------
+# Default operating system ID for instance provisioning (optional fallback)
+nvidia_bmm_default_operating_system_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_OS_ID') | default('', true) }}"
+
+# Default SSH key group ID for instance access (optional fallback)
+nvidia_bmm_default_ssh_key_group_id: "{{ lookup('env', 'NVIDIA_BMM_SSH_KEY_GROUP_ID') | default('', true) }}"
+
+# Resource Labels
+# ---------------
+# Common labels applied to all NVIDIA BMM-provisioned resources
+nvidia_bmm_common_labels:
+  managed-by: osac
+  provider: nvidia-bmm
+
+# Cluster order label for associating agents with clusters
+cluster_order_label: "osac.io/cluster"
+
+# CRITICAL: Agent resource class label compatibility with ESI backend
+# This MUST use the same label key as the ESI backend to ensure the
+# manage_agents role can properly select and label agents across both backends.
+# From osac-aap/group_vars/all/esi_common_labels.yaml
+esi_agent_resource_class_label: "esi.nerc.mghpcc.org/resource_class"
+
+# Instance Type Mappings
+# ----------------------
+# NOTE: Instance type mappings are template-specific configuration and should
+# be defined in each cluster template's defaults/main.yaml file, NOT here.
+#
+# This keeps hardware profile mappings with the templates that use them.
+#
+# Example in template defaults/main.yaml:
+#   nvidia_bmm_instance_type_mappings:
+#     dgx: "abcd-efgh-ijkl-mnop"
+#     gpu_small: "qrst-uvwx-yzab-cdef"
+#
+# This global fallback is only used if a template doesn't define its own mappings.
+nvidia_bmm_instance_type_mappings: {}
