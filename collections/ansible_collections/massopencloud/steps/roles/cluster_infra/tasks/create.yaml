@@ -2,7 +2,12 @@
   ansible.builtin.debug:
     var: cluster_infra_node_requests
 
-- name: Create cluster network
+# Backend routing: ESI or Carbide based on infrastructure_provider
+# infrastructure_provider extracted from template meta/osac.yaml by extract_template_info role
+# Defaults to 'esi' for backward compatibility
+
+- name: Create ESI cluster network
+  when: infrastructure_provider | default('esi') == 'esi'
   ansible.builtin.include_role:
     name: massopencloud.esi.network
   vars:
@@ -13,9 +18,23 @@
       clusterorder: "{{ cluster_infra_name }}"
       purpose: "o-sac"
 
-- name: Set cluster_infra_network_name
+- name: Set ESI network name
+  when: infrastructure_provider | default('esi') == 'esi'
   ansible.builtin.set_fact:
     cluster_infra_network_name: "network-{{ cluster_infra_name }}"
+
+- name: Create Carbide cluster infrastructure
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.include_role:
+    name: osac.service.carbide_infra
+  vars:
+    carbide_infra_state: present
+    carbide_infra_name: "{{ cluster_infra_name }}"
+    carbide_infra_namespace: "{{ cluster_working_namespace }}"
+    # Optional template parameters for using existing VPC/prefix
+    carbide_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
+    carbide_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"
+    carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
 
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
