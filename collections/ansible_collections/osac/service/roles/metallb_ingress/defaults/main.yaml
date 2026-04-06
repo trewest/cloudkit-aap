@@ -1,0 +1,5 @@
+---
+# IP allocation defaults
+metallb_ip_registry_namespace: "hardware-inventory"  # Same namespace as InfraEnv per Phase 1 patterns
+metallb_ip_allocation_retries: 5                     # Retry count for ConfigMap update race conditions
+metallb_ip_allocation_delay: 2                       # Delay in seconds between retries
