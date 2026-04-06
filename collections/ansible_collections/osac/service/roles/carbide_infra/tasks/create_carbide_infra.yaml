@@ -84,6 +84,11 @@
   ansible.builtin.debug:
     msg: "Using VPC: {{ carbide_vpc_id }}, Prefix: {{ carbide_vpc_prefix_id }}"
 
+# Instance provisioning (Phase 2)
+- name: Provision Carbide instances into cluster VPC
+  ansible.builtin.include_tasks: create_instances.yaml
+  when: carbide_infra_node_requests is defined and carbide_infra_node_requests | length > 0
+
 # Store infrastructure state in ConfigMap for deletion workflow
 - name: Create ConfigMap with VPC and prefix state
   kubernetes.core.k8s:
@@ -104,6 +109,7 @@
         vpc_prefix_id: "{{ carbide_vpc_prefix_id }}"
         vpc_created: "{{ carbide_vpc_created | default(false) | string }}"
         prefix_created: "{{ carbide_prefix_created | default(false) | string }}"
+        instance_ids: "{{ carbide_all_instance_ids | default([]) | to_json }}"
         site_id: "{{ nvidia_bmm_site_id }}"
         tenant_id: "{{ nvidia_bmm_tenant_id }}"
 
