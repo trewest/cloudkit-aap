@@ -1,0 +1,36 @@
+---
+argument_specs:
+  main:
+    short_description: OpenShift 4.20 cluster on Carbide infrastructure
+    description:
+      - Creates an OpenShift 4.20 cluster using NVIDIA Carbide for bare metal provisioning
+      - Requires Carbide credentials configured via cluster-fulfillment-ig Secret
+    options:
+      pull_secret:
+        description: OpenShift pull secret for image registry authentication
+        type: str
+        required: true
+      ssh_public_key:
+        description: SSH public key for cluster node access
+        type: str
+        required: true
+      ip_block_id:
+        description: Carbide IP block ID for VPC prefix allocation
+        type: str
+        required: true
+      ocp_release_image:
+        description: OpenShift release image (overrides default)
+        type: str
+        required: false
+      vpc_id:
+        description: Existing Carbide VPC ID (if not creating new VPC)
+        type: str
+        required: false
+      vpc_prefix_id:
+        description: Existing Carbide VPC prefix ID (if not creating new prefix)
+        type: str
+        required: false
+      ssh_key_group_id:
+        description: Carbide SSH key group ID (overrides default)
+        type: str
+        required: false

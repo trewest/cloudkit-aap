@@ -1,0 +1,26 @@
+# Template metadata for OSAC cluster-as-a-service
+title: Simple OpenShift 4.20 Cluster (Carbide)
+description: >
+  This template creates a minimally configured OpenShift 4.20 cluster
+  using NVIDIA Carbide Bare Metal Manager for infrastructure provisioning.
+  Compute instances are provisioned on Carbide-managed bare metal with
+  per-cluster VPC isolation.
+
+# Infrastructure provider for backend routing (per D-07)
+# extract_template_info role extracts this to infrastructure_provider variable
+# cluster_infra uses this to route to carbide_infra (Plan 03)
+infrastructure_provider: nvidia_bmm
+
+# Default node request for cluster creation
+# resourceClass values must have corresponding entries in
+# template_instance_type_mappings (defined in defaults/main.yaml per D-08)
+default_node_request:
+  - resourceClass: dgx
+    numberOfNodes: 2
+
+# Allowed resource classes for this template (per D-07)
+# Cluster scale operations must use resource classes from this list
+allowed_resource_classes:
+  - dgx
+  - gpu_small
+  - gpu_large
