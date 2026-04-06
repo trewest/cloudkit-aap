@@ -105,6 +105,13 @@
   until: metallb_ingress_l2advertisement is successful
   retries: 60
   delay: 10
+  when: infrastructure_provider is not defined or infrastructure_provider != 'nvidia_bmm'
+
+- name: Configure BGP for Carbide infrastructure
+  ansible.builtin.include_tasks: configure_bgp.yml
+  when:
+    - infrastructure_provider is defined
+    - infrastructure_provider == 'nvidia_bmm'
 
 - name: Create metallb ingress service
   kubernetes.core.k8s:
