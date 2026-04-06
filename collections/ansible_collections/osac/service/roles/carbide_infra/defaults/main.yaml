@@ -1,0 +1,26 @@
+---
+# Defaults for carbide_infra role
+
+# State: present or absent
+carbide_infra_state: present
+
+# Cluster name (used for VPC naming per D-09)
+carbide_infra_name: ""
+
+# Kubernetes namespace for ConfigMap state storage
+carbide_infra_namespace: ""
+
+# VPC naming prefix (per D-09: osac-vpc-{cluster_name})
+carbide_infra_vpc_name_prefix: "osac-vpc"
+
+# VPC prefix length (subnet size)
+carbide_infra_prefix_length: "{{ nvidia_bmm_default_prefix_length | default(24) }}"
+
+# Optional: Use existing VPC instead of creating new
+carbide_infra_vpc_id: ""
+
+# Optional: Use existing VPC prefix instead of creating new
+carbide_infra_vpc_prefix_id: ""
+
+# IP block ID for prefix allocation (required when creating new prefix)
+carbide_infra_ip_block_id: ""
