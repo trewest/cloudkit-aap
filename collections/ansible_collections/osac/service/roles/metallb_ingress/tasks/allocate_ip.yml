@@ -1,0 +1,109 @@
+---
+# IP Allocation for MetalLB Ingress
+#
+# This task allocates a unique /32 IP address from a shared CIDR range
+# for MetalLB ingress configuration. IP allocations are tracked in a
+# ConfigMap registry to prevent collisions across multiple hosted clusters.
+#
+# The allocation is idempotent: re-running with the same cluster_name
+# will return the same IP address if already allocated.
+
+- name: Read IP registry ConfigMap
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    namespace: "{{ metallb_ip_registry_namespace }}"
+    name: carbide-ip-registry
+    kubeconfig: "{{ hub_kubeconfig }}"
+  register: ip_registry_info
+  retries: "{{ metallb_ip_allocation_retries }}"
+  delay: "{{ metallb_ip_allocation_delay }}"
+  until: ip_registry_info is successful
+
+- name: Extract allocated IPs from registry
+  ansible.builtin.set_fact:
+    allocated_ips: "{{ ip_registry_info.resources[0].data | default({}) }}"
+  when: ip_registry_info.resources | length > 0
+
+- name: Initialize empty registry if ConfigMap doesn't exist
+  ansible.builtin.set_fact:
+    allocated_ips: {}
+  when: ip_registry_info.resources | length == 0
+
+- name: Check for existing IP allocation for this cluster
+  ansible.builtin.set_fact:
+    metallb_ingress_ip: "{{ item.key }}"
+  loop: "{{ allocated_ips | dict2items }}"
+  when: item.value == cluster_name
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Log existing IP allocation
+  ansible.builtin.debug:
+    msg: "IP already allocated for cluster {{ cluster_name }}: {{ metallb_ingress_ip }}"
+  when: metallb_ingress_ip is defined
+
+- name: Generate list of all /32 IPs in CIDR range
+  ansible.builtin.set_fact:
+    all_possible_ips: "{{ ingress_cidr_range | ansible.utils.ipaddr('address') }}"
+  when: metallb_ingress_ip is not defined
+
+- name: Find first available /32 IP not in registry
+  ansible.builtin.set_fact:
+    metallb_ingress_ip: "{{ item }}"
+  loop: "{{ all_possible_ips }}"
+  when:
+    - metallb_ingress_ip is not defined
+    - item not in allocated_ips.keys()
+  loop_control:
+    label: "{{ item }}"
+
+- name: Fail if no available IPs in CIDR range
+  ansible.builtin.fail:
+    msg: "No available IPs in {{ ingress_cidr_range }}. Current allocations: {{ allocated_ips | length }}. Allocated IPs: {{ allocated_ips.keys() | list }}"
+  when: metallb_ingress_ip is not defined
+
+- name: Update IP registry ConfigMap with new allocation
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ hub_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: carbide-ip-registry
+        namespace: "{{ metallb_ip_registry_namespace }}"
+      data: "{{ allocated_ips | combine({metallb_ingress_ip: cluster_name}) }}"
+  register: registry_update_result
+  retries: "{{ metallb_ip_allocation_retries }}"
+  delay: "{{ metallb_ip_allocation_delay }}"
+  until: registry_update_result is successful
+  when: item.value != cluster_name or true
+  vars:
+    item:
+      value: "{{ allocated_ips.get(metallb_ingress_ip, '') }}"
+
+- name: Validate IP allocation by re-reading ConfigMap
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    namespace: "{{ metallb_ip_registry_namespace }}"
+    name: carbide-ip-registry
+    kubeconfig: "{{ hub_kubeconfig }}"
+  register: validation_result
+  retries: "{{ metallb_ip_allocation_retries }}"
+  delay: "{{ metallb_ip_allocation_delay }}"
+  until: validation_result is successful
+
+- name: Verify IP is registered in ConfigMap
+  ansible.builtin.assert:
+    that:
+      - validation_result.resources | length > 0
+      - validation_result.resources[0].data[metallb_ingress_ip] is defined
+      - validation_result.resources[0].data[metallb_ingress_ip] == cluster_name
+    fail_msg: "IP allocation validation failed: {{ metallb_ingress_ip }} not found in registry or assigned to different cluster"
+    success_msg: "IP allocation validated: {{ metallb_ingress_ip }} → {{ cluster_name }}"
+
+- name: Log successful IP allocation
+  ansible.builtin.debug:
+    msg: "Allocated IP {{ metallb_ingress_ip }} for cluster {{ cluster_name }}"
