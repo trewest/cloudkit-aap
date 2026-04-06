@@ -23,6 +23,7 @@
     carbide_vpc_prefix_id: "{{ carbide_infra_configmap.resources[0].data.vpc_prefix_id | default('') }}"
     carbide_vpc_was_created: "{{ carbide_infra_configmap.resources[0].data.vpc_created | default('true') | bool }}"
     carbide_prefix_was_created: "{{ carbide_infra_configmap.resources[0].data.prefix_created | default('true') | bool }}"
+    carbide_stored_instance_ids: "{{ carbide_infra_configmap.resources[0].data.instance_ids | default('[]') | from_json }}"
 
 - name: Set default flags if ConfigMap missing
   when: carbide_infra_configmap.resources | length == 0
@@ -31,12 +32,31 @@
     carbide_vpc_prefix_id: ""
     carbide_vpc_was_created: true  # Default to delete if unknown state
     carbide_prefix_was_created: true  # Default to delete if unknown state
+    carbide_stored_instance_ids: []
 
 - name: Display deletion plan
   ansible.builtin.debug:
     msg: >
-      Deletion plan: VPC prefix: {{ 'delete' if carbide_prefix_was_created else 'skip (pre-existing)' }},
+      Deletion plan: Instances: {{ carbide_stored_instance_ids | default([]) | length }},
+      VPC prefix: {{ 'delete' if carbide_prefix_was_created else 'skip (pre-existing)' }},
       VPC: {{ 'delete' if carbide_vpc_was_created else 'skip (pre-existing)' }}
+
+# Delete instances first (reverse creation order)
+- name: Delete instances
+  nvidia.bare_metal.instance:
+    state: absent
+    id: "{{ instance_id }}"
+    wait: true
+    wait_timeout: "{{ carbide_infra_wait_timeout | default(1800) }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+  loop: "{{ carbide_stored_instance_ids | default([]) }}"
+  loop_control:
+    loop_var: instance_id
+    label: "Deleting instance {{ instance_id }}"
+  ignore_errors: true  # Instance may have been manually deleted
 
 # Delete VPC prefix only if created by this cluster
 - name: Delete VPC prefix (only if created by this cluster)
