@@ -1,0 +1,50 @@
+---
+# ESI-specific external access: floating IPs and port forwarding for API and ingress
+
+- name: Allocate api floating ip
+  ansible.builtin.include_role:
+    name: massopencloud.esi.floating_ip
+  vars:
+    floating_ip_state: present
+    floating_ip_name: "{{ external_access_name }}-api"  # noqa:var-naming[no-role-prefix]
+    floating_ip_properties:
+      instance: "{{ cluster_order.metadata.namespace }}"
+      clusterorder: "{{ external_access_name }}"
+      purpose: "o-sac"
+
+- name: Set api_floating_ip
+  ansible.builtin.set_fact:
+    external_access_api_floating_ip: "{{ allocate_floating_ip_result }}"
+
+- name: Create port forwarding for api endpoint  # noqa:no-changed-when
+  ansible.builtin.include_role:
+    name: massopencloud.esi.floating_ip
+    tasks_from: create_port_forwarding
+  vars:
+    internal_ip: "{{ external_access_api_internal_ip }}"
+    floating_ip: "{{ external_access_api_floating_ip }}"
+    internal_network: "{{ external_access_api_internal_network }}"
+    ports:
+    - "{{ external_access_kube_apiserver_port }}"
+    description: "{{ external_access_name }}-api"
+
+- name: Allocate ingress floating ip
+  ansible.builtin.include_role:
+    name: massopencloud.esi.floating_ip
+  vars:
+    floating_ip_state: present
+    floating_ip_name: "{{ external_access_name }}-ingress"  # noqa:var-naming[no-role-prefix]
+    floating_ip_properties:
+      instance: "{{ cluster_order.metadata.namespace }}"
+      clusterorder: "{{ external_access_name }}"
+      purpose: "o-sac"
+
+- name: Set external_access_ingress_floating_ip
+  ansible.builtin.set_fact:
+    external_access_ingress_floating_ip: "{{ allocate_floating_ip_result }}"
+
+# Set shared variables consumed by the DNS records step
+- name: Set shared IP variables for DNS
+  ansible.builtin.set_fact:
+    external_access_api_ip: "{{ external_access_api_floating_ip }}"
+    external_access_ingress_ip: "{{ external_access_ingress_floating_ip }}"

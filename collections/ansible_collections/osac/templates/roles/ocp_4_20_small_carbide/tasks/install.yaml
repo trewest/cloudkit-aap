@@ -10,8 +10,8 @@
       name: osac.service.cluster_infra
       tasks_from: main.yml
     install_step_external_access_default:
-      name: osac.templates.ocp_4_20_small_carbide
-      tasks_from: configure_external_access.yaml
+      name: osac.service.external_access
+      tasks_from: main.yml
     install_step_retrieve_kubeconfig_default:
       name: osac.service.retrieve_kubeconfig
       tasks_from: main.yml
@@ -57,6 +57,11 @@
   ansible.builtin.include_role:
     name: "{{ (install_step_external_access_override | default(install_step_external_access_default)).name }}"
     tasks_from: "{{ (install_step_external_access_override | default(install_step_external_access_default)).tasks_from }}"
+  vars:
+    external_access_name: "{{ cluster_order.metadata.name }}"
+    external_access_state: present
+    external_access_namespace: "{{ cluster_working_namespace }}"
+    external_access_local_asn: "{{ template_parameters.local_asn }}"
 
 - name: Step - Retrieve kubeconfig
   ansible.builtin.include_role:

@@ -1,0 +1,55 @@
+---
+# Carbide-specific MetalLB configuration: allocate IP from CIDR registry, configure MetalLB with BGP
+
+- name: Write kubeconfig to temporary file
+  ansible.builtin.copy:
+    content: "{{ admin_kubeconfig | to_nice_yaml }}"
+    dest: "/tmp/{{ external_access_name }}-kubeconfig.yaml"
+    mode: '0600'
+  register: external_access_kubeconfig_file
+
+- name: Configure metallb for ingress with IP allocation and BGP
+  block:
+    - name: Configure metallb
+      ansible.builtin.include_role:
+        name: osac.service.metallb_ingress
+        tasks_from: configure_metallb_ingress
+      vars:
+        metallb_ingress_admin_kubeconfig: "{{ external_access_kubeconfig_file.dest }}"
+        ingress_cidr_range: "{{ external_access_ingress_cidr_range }}"
+        cluster_name: "{{ external_access_name }}"
+        infrastructure_provider: "nvidia_bmm"
+        local_asn: "{{ external_access_local_asn }}"
+
+  rescue:
+    - name: Read IP registry ConfigMap for cleanup
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ConfigMap
+        name: carbide-ip-registry
+        namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
+      register: cleanup_registry
+
+    - name: Remove cluster IP from registry on failure
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: carbide-ip-registry
+            namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
+          data: "{{ cleanup_registry.resources[0].data | dict2items | rejectattr('value', 'equalto', external_access_name) | items2dict }}"
+      when: cleanup_registry.resources | length > 0
+      ignore_errors: yes
+
+    - name: Fail with MetalLB configuration error
+      ansible.builtin.fail:
+        msg: "MetalLB ingress configuration failed after IP cleanup. See errors above."
+
+  always:
+    - name: Clean up temporary kubeconfig file
+      ansible.builtin.file:
+        path: "{{ external_access_kubeconfig_file.dest }}"
+        state: absent
+      when: external_access_kubeconfig_file.dest is defined
