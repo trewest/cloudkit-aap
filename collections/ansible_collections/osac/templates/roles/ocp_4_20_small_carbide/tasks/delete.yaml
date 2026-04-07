@@ -1,24 +1,49 @@
----
-# Delete tasks for OpenShift 4.20 cluster on Carbide infrastructure
+- name: Set delete step defaults
+  ansible.builtin.set_fact:
+    delete_step_pre_delete_hook_default:
+      name: osac.templates.ocp_4_20_small_carbide
+      tasks_from: noop.yml
+    delete_step_hosted_cluster_default:
+      name: osac.service.hosted_cluster
+      tasks_from: main.yml
+    delete_step_cluster_infra_default:
+      name: osac.service.cluster_infra
+      tasks_from: main.yml
+    delete_step_post_delete_hook_default:
+      name: osac.templates.ocp_4_20_small_carbide
+      tasks_from: noop.yml
 
-- name: Delete hosted cluster
-  ansible.builtin.import_role:
-    name: osac.service.hosted_cluster
+- name: Step - Pre-delete hook
+  ansible.builtin.include_role:
+    name: "{{ (delete_step_pre_delete_hook_override | default(delete_step_pre_delete_hook_default)).name }}"
+    tasks_from: "{{ (delete_step_pre_delete_hook_override | default(delete_step_pre_delete_hook_default)).tasks_from }}"
+
+- name: Step - Destroy hosted cluster
+  ansible.builtin.include_role:
+    name: "{{ (delete_step_hosted_cluster_override | default(delete_step_hosted_cluster_default)).name }}"
+    tasks_from: "{{ (delete_step_hosted_cluster_override | default(delete_step_hosted_cluster_default)).tasks_from }}"
   vars:
+    hosted_cluster_state: absent
     hosted_cluster_name: "{{ cluster_order.metadata.name }}"
     hosted_cluster_namespace: "{{ cluster_working_namespace }}"
-    hosted_cluster_state: absent
-  ignore_errors: true
+    hosted_cluster_settings:
+      ocp_release_image: "{{ ocp_release_image }}"
+      pull_secret: "{{ template_parameters.pull_secret }}"
+      ssh_public_key: "{{ template_parameters.ssh_public_key }}"
+    hosted_cluster_node_count: >-
+      {{ cluster_order.spec.nodeRequests | map(attribute="numberOfNodes") | sum }}
 
-- name: Delete cluster infrastructure
-  ansible.builtin.import_role:
-    name: osac.service.cluster_infra
-    tasks_from: delete_cluster_infra
+- name: Step - Destroy cluster infrastructure
+  ansible.builtin.include_role:
+    name: "{{ (delete_step_cluster_infra_override | default(delete_step_cluster_infra_default)).name }}"
+    tasks_from: "{{ (delete_step_cluster_infra_override | default(delete_step_cluster_infra_default)).tasks_from }}"
   vars:
+    cluster_infra_state: absent
     cluster_infra_name: "{{ cluster_order.metadata.name }}"
-    # cluster_infra routes to carbide_infra deletion (Plan 03)
-  ignore_errors: true
+    cluster_infra_namespace: "{{ cluster_working_namespace }}"
+    cluster_infra_node_requests: []
 
-- name: Cluster deletion complete
-  ansible.builtin.debug:
-    msg: "OpenShift cluster {{ cluster_order.metadata.name }} and Carbide infrastructure have been deleted"
+- name: Step - Post-delete hook
+  ansible.builtin.include_role:
+    name: "{{ (delete_step_post_delete_hook_override | default(delete_step_post_delete_hook_default)).name }}"
+    tasks_from: "{{ (delete_step_post_delete_hook_override | default(delete_step_post_delete_hook_default)).tasks_from }}"
