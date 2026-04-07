@@ -9,8 +9,7 @@
         tasks_from: configure_metallb_ingress
       vars:
         metallb_ingress_admin_kubeconfig: "{{ admin_kubeconfig }}"
-        ingress_cidr_range: "{{ external_access_ingress_cidr_range }}"
-        cluster_name: "{{ external_access_name }}"
+        metallb_ingress_ip: "{{ metallb_ingress_ip }}"
         infrastructure_provider: "nvidia_bmm"
         local_asn: "{{ external_access_local_asn }}"
 
