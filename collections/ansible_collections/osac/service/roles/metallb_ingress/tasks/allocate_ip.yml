@@ -43,9 +43,9 @@
     msg: "IP already allocated for cluster {{ cluster_name }}: {{ metallb_ingress_ip }}"
   when: metallb_ingress_ip is defined
 
-- name: Generate list of all /32 IPs in CIDR range
+- name: Generate list of all host IPs in CIDR range
   ansible.builtin.set_fact:
-    all_possible_ips: "{{ ingress_cidr_range | ansible.utils.ipaddr('address') }}"
+    all_possible_ips: "{{ ingress_cidr_range | osac.service.cidr_hosts }}"
   when: metallb_ingress_ip is not defined
 
 - name: Find first available /32 IP not in registry
