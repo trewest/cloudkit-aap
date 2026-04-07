@@ -1,12 +1,20 @@
-- name: Destroy floating ips
-  ansible.builtin.include_role:
-    name: massopencloud.esi.floating_ip
-    tasks_from: destroy_floating_ip.yaml
-  vars:
-    floating_ip_name: "{{ item }}"
-  loop:
-    - "{{ external_access_name }}-api"
-    - "{{ external_access_name }}-ingress"
+# =============================================================================
+# Provider-specific: cleanup allocated resources
+# =============================================================================
+
+- name: ESI cleanup
+  when: infrastructure_provider is not defined or infrastructure_provider != 'nvidia_bmm'
+  ansible.builtin.include_tasks: destroy_external_access_esi.yaml
+
+- name: Carbide cleanup
+  when:
+    - infrastructure_provider is defined
+    - infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.include_tasks: destroy_external_access_carbide.yaml
+
+# =============================================================================
+# Shared: DNS record cleanup
+# =============================================================================
 
 - name: Delete dns records
   amazon.aws.route53:

@@ -14,7 +14,7 @@
     kind: ConfigMap
     namespace: "{{ metallb_ip_registry_namespace }}"
     name: carbide-ip-registry
-    kubeconfig: "{{ hub_kubeconfig }}"
+    kubeconfig: "{{ hub_kubeconfig | default(omit) }}"
   register: ip_registry_info
   retries: "{{ metallb_ip_allocation_retries }}"
   delay: "{{ metallb_ip_allocation_delay }}"
@@ -56,7 +56,7 @@
 - name: Update IP registry ConfigMap with new allocation
   kubernetes.core.k8s:
     state: present
-    kubeconfig: "{{ hub_kubeconfig }}"
+    kubeconfig: "{{ hub_kubeconfig | default(omit) }}"
     definition:
       apiVersion: v1
       kind: ConfigMap
@@ -76,7 +76,7 @@
     kind: ConfigMap
     namespace: "{{ metallb_ip_registry_namespace }}"
     name: carbide-ip-registry
-    kubeconfig: "{{ hub_kubeconfig }}"
+    kubeconfig: "{{ hub_kubeconfig | default(omit) }}"
   register: validation_result
   retries: "{{ metallb_ip_allocation_retries }}"
   delay: "{{ metallb_ip_allocation_delay }}"
