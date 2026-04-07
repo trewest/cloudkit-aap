@@ -6,6 +6,9 @@
     delete_step_hosted_cluster_default:
       name: osac.service.hosted_cluster
       tasks_from: main.yml
+    delete_step_external_access_default:
+      name: osac.service.external_access
+      tasks_from: main.yml
     delete_step_cluster_infra_default:
       name: osac.service.cluster_infra
       tasks_from: main.yml
@@ -32,6 +35,15 @@
       ssh_public_key: "{{ template_parameters.ssh_public_key }}"
     hosted_cluster_node_count: >-
       {{ cluster_order.spec.nodeRequests | map(attribute="numberOfNodes") | sum }}
+
+- name: Step - Remove external access
+  ansible.builtin.include_role:
+    name: "{{ (delete_step_external_access_override | default(delete_step_external_access_default)).name }}"
+    tasks_from: "{{ (delete_step_external_access_override | default(delete_step_external_access_default)).tasks_from }}"
+  vars:
+    external_access_state: absent
+    external_access_name: "{{ cluster_order.metadata.name }}"
+    external_access_namespace: "{{ cluster_working_namespace }}"
 
 - name: Step - Destroy cluster infrastructure
   ansible.builtin.include_role:
