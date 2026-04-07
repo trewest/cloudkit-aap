@@ -68,10 +68,7 @@
   retries: "{{ metallb_ip_allocation_retries }}"
   delay: "{{ metallb_ip_allocation_delay }}"
   until: registry_update_result is successful
-  when: item.value != cluster_name or true
-  vars:
-    item:
-      value: "{{ allocated_ips.get(metallb_ingress_ip, '') }}"
+  when: allocated_ips.get(metallb_ingress_ip, '') != cluster_name
 
 - name: Validate IP allocation by re-reading ConfigMap
   kubernetes.core.k8s_info:

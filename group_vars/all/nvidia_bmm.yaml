@@ -90,17 +90,8 @@ cluster_order_label: "osac.io/cluster"
 # From osac-aap/group_vars/all/esi_common_labels.yaml
 esi_agent_resource_class_label: "esi.nerc.mghpcc.org/resource_class"
 
-# Instance Type Mappings
-# ----------------------
-# NOTE: Instance type mappings are template-specific configuration and should
-# be defined in each cluster template's defaults/main.yaml file, NOT here.
-#
-# This keeps hardware profile mappings with the templates that use them.
-#
-# Example in template defaults/main.yaml:
-#   nvidia_bmm_instance_type_mappings:
-#     dgx: "abcd-efgh-ijkl-mnop"
-#     gpu_small: "qrst-uvwx-yzab-cdef"
-#
-# This global fallback is only used if a template doesn't define its own mappings.
-nvidia_bmm_instance_type_mappings: {}
+# Instance Type Resolution
+# ------------------------
+# Instance types are resolved by name via the Carbide API.
+# The resource class name in nodeRequests must match a Carbide instance
+# type name at the configured site. No manual mapping is needed.
