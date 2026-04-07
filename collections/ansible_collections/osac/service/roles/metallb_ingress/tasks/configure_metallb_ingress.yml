@@ -1,11 +1,5 @@
 # this playbook follows the instructions detailed at https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/hosted_control_planes/managing-hosted-control-planes#hcp-bm-ingress_hcp-manage-bm
 
-- name: Allocate IP address from CIDR range
-  ansible.builtin.include_tasks: allocate_ip.yml
-  when:
-    - infrastructure_provider is defined
-    - infrastructure_provider == 'nvidia_bmm'
-
 - name: Set metallb namespace
   ansible.builtin.set_fact:
     metallb_namespace: metallb-system
