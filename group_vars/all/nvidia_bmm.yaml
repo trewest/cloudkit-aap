@@ -20,6 +20,7 @@
 #   - NVIDIA_BMM_DEFAULT_IP_BLOCK_ID - Default IP block for VPC prefixes (optional)
 #   - NVIDIA_BMM_SSH_KEY_GROUP_ID  - Default SSH key group (optional)
 #   - NVIDIA_BMM_DEFAULT_OS_ID     - Default operating system ID (optional)
+#   - NVIDIA_BMM_INGRESS_CIDR      - CIDR range for ingress IP allocation
 
 # API Connection Settings
 # -----------------------
@@ -58,6 +59,12 @@ nvidia_bmm_default_prefix_length: 24
 
 # Default IP block for VPC prefix allocation (optional fallback)
 nvidia_bmm_default_ip_block_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_IP_BLOCK_ID') | default('', true) }}"
+
+# External Access Configuration
+# -----------------------------
+# CIDR range for ingress IP allocation (e.g., 10.0.100.0/24)
+# A /32 is allocated from this range per cluster for MetalLB ingress
+nvidia_bmm_ingress_cidr: "{{ lookup('env', 'NVIDIA_BMM_INGRESS_CIDR') | default('', true) }}"
 
 # Instance Provisioning Defaults
 # ------------------------------
