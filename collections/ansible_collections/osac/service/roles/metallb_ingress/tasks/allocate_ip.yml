@@ -43,25 +43,15 @@
     msg: "IP already allocated for cluster {{ cluster_name }}: {{ metallb_ingress_ip }}"
   when: metallb_ingress_ip is defined
 
-- name: Generate list of all host IPs in CIDR range
+- name: Find first available IP in CIDR range
   ansible.builtin.set_fact:
-    all_possible_ips: "{{ ingress_cidr_range | osac.service.cidr_hosts }}"
+    metallb_ingress_ip: "{{ ingress_cidr_range | osac.service.next_available_ip(allocated_ips) }}"
   when: metallb_ingress_ip is not defined
-
-- name: Find first available /32 IP not in registry
-  ansible.builtin.set_fact:
-    metallb_ingress_ip: "{{ item }}"
-  loop: "{{ all_possible_ips }}"
-  when:
-    - metallb_ingress_ip is not defined
-    - item not in allocated_ips.keys()
-  loop_control:
-    label: "{{ item }}"
 
 - name: Fail if no available IPs in CIDR range
   ansible.builtin.fail:
-    msg: "No available IPs in {{ ingress_cidr_range }}. Current allocations: {{ allocated_ips | length }}. Allocated IPs: {{ allocated_ips.keys() | list }}"
-  when: metallb_ingress_ip is not defined
+    msg: "No available IPs in {{ ingress_cidr_range }}. Current allocations: {{ allocated_ips | length }}"
+  when: metallb_ingress_ip is not defined or metallb_ingress_ip == 'None'
 
 - name: Update IP registry ConfigMap with new allocation
   kubernetes.core.k8s:
