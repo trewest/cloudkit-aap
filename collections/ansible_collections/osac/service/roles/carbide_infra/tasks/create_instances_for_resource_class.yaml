@@ -2,69 +2,31 @@
 # Create instances for a specific resource class
 # This task file is included from create_instances.yaml
 
-# Determine instance type: use override if provided, otherwise use mapping
-- name: "{{ node_request.resourceClass }} - Check for instance type override"
+# Resolve instance type by looking up the resource class name directly in Carbide API.
+# Per the enhancement proposal, the hostclass name in nodeRequests matches the Carbide
+# instance type name — no user-maintained mapping dict needed.
+- name: "{{ node_request.resourceClass }} - Look up instance type by resource class name"
+  nvidia.bare_metal.instance_type_info:
+    name: "{{ node_request.resourceClass }}"
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+  register: instance_type_lookup
+
+- name: "{{ node_request.resourceClass }} - Validate instance type was found"
+  ansible.builtin.assert:
+    that:
+      - instance_type_lookup.resource is defined
+      - instance_type_lookup.resource.id is defined
+    fail_msg: >
+      Carbide instance type '{{ node_request.resourceClass }}' not found.
+      The resource class name in nodeRequests must match a Carbide instance type name.
+      Verify the instance type exists at the configured site.
+
+- name: "{{ node_request.resourceClass }} - Set resolved instance type ID"
   ansible.builtin.set_fact:
-    use_instance_type_override: "{{ carbide_infra_instance_type_id is defined and carbide_infra_instance_type_id | length > 0 }}"
-
-- name: "{{ node_request.resourceClass }} - Use instance type override"
-  ansible.builtin.set_fact:
-    current_instance_type_id: "{{ carbide_infra_instance_type_id }}"
-  when: use_instance_type_override
-
-# If no override, use the resource class mapping
-- name: "{{ node_request.resourceClass }} - Resolve instance type from mapping"
-  when: not use_instance_type_override
-  block:
-    - name: "{{ node_request.resourceClass }} - Get instance type mapping"
-      ansible.builtin.set_fact:
-        current_instance_type_value: "{{ carbide_instance_type_mappings[node_request.resourceClass] | default('') }}"
-
-    - name: "{{ node_request.resourceClass }} - Validate instance type mapping exists"
-      ansible.builtin.assert:
-        that:
-          - current_instance_type_value | length > 0
-        fail_msg: >
-          No instance type mapping found for resource class '{{ node_request.resourceClass }}'.
-          Please configure carbide_instance_type_mappings in template defaults or provide
-          carbide_infra_instance_type_id in template_parameters.
-
-    # Check if the value looks like a UUID or is a name
-    - name: "{{ node_request.resourceClass }} - Determine if mapping is ID or name"
-      ansible.builtin.set_fact:
-        instance_type_is_uuid: "{{ current_instance_type_value is regex('^[0-9a-fA-F-]{36}$') }}"
-
-    # If it's already a UUID, use it directly
-    - name: "{{ node_request.resourceClass }} - Use instance type ID directly"
-      ansible.builtin.set_fact:
-        current_instance_type_id: "{{ current_instance_type_value }}"
-      when: instance_type_is_uuid
-
-    # If it's a name, look up the ID
-    - name: "{{ node_request.resourceClass }} - Look up instance type by name"
-      when: not instance_type_is_uuid
-      block:
-        - name: "{{ node_request.resourceClass }} - Query instance type by name"
-          nvidia.bare_metal.instance_type_info:
-            name: "{{ current_instance_type_value }}"
-            api_url: "{{ nvidia_bmm_api_url }}"
-            api_token: "{{ nvidia_bmm_api_token }}"
-            org: "{{ nvidia_bmm_org }}"
-            api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
-          register: instance_type_lookup
-
-        - name: "{{ node_request.resourceClass }} - Validate instance type was found"
-          ansible.builtin.assert:
-            that:
-              - instance_type_lookup.resource is defined
-              - instance_type_lookup.resource.id is defined
-            fail_msg: >
-              Instance type '{{ current_instance_type_value }}' not found in Carbide.
-              Please verify the instance type name or use the UUID directly.
-
-        - name: "{{ node_request.resourceClass }} - Set instance type ID from lookup"
-          ansible.builtin.set_fact:
-            current_instance_type_id: "{{ instance_type_lookup.resource.id }}"
+    current_instance_type_id: "{{ instance_type_lookup.resource.id }}"
 
 - name: "{{ node_request.resourceClass }} - Display resolved instance type"
   ansible.builtin.debug:

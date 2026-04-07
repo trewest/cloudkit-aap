@@ -52,12 +52,8 @@ carbide_infra_topology_optimized: false
 carbide_infra_wait: true
 carbide_infra_wait_timeout: 1800
 
-# Optional: Override SSH key group and instance type per template
+# Optional: Override SSH key group per template
 # carbide_infra_ssh_key_group_id: ""
-# carbide_infra_instance_type_id: ""
-
-# Instance type mappings (from template defaults, not here)
-# carbide_instance_type_mappings: {}
 
 # Certificate validation for iPXE script fetch
 carbide_infra_validate_certs: false

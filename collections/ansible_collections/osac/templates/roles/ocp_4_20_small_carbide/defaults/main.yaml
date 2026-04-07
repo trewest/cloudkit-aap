@@ -3,19 +3,9 @@
 # Can be overridden via template_parameters.ocp_release_image
 ocp_release_image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
 
-# Instance type mappings for this template
-# Maps resource class names (from nodeRequests) to Carbide instance type IDs
-# Per D-08: these belong in template defaults, NOT in global group_vars
+# Instance type resolution: resource class names in nodeRequests must match
+# Carbide instance type names directly. The carbide_infra role looks up the
+# instance type by name via the Carbide API — no manual mapping needed.
 #
-# Values can be UUIDs or instance type names (Carbide API accepts both)
-# These must match the allowed_resource_classes in meta/osac.yaml
-template_instance_type_mappings:
-  dgx: "f3d15b05-41ad-4acf-8458-1bbca78d603b"  # From POC - DGX instance type
-  # Additional mappings can be added for other resource classes:
-  # gpu_small: "instance-type-uuid-for-small-gpu"
-  # gpu_large: "instance-type-uuid-for-large-gpu"
-  #
-  # To find instance type IDs:
-  # 1. Query Carbide API: GET /api/forge/instance-types
-  # 2. Use Carbide CLI: nvidia-bmm instance-type list
-  # 3. Check Carbide UI: Settings -> Instance Types
+# Example: if nodeRequests specifies resourceClass "dgx", there must be a
+# Carbide instance type named "dgx" at the configured site.

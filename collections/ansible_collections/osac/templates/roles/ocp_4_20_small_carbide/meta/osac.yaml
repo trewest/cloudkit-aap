@@ -12,8 +12,7 @@ description: >
 infrastructure_provider: nvidia_bmm
 
 # Default node request for cluster creation
-# resourceClass values must have corresponding entries in
-# template_instance_type_mappings (defined in defaults/main.yaml per D-08)
+# resourceClass values must match Carbide instance type names at the configured site
 default_node_request:
   - resourceClass: dgx
     numberOfNodes: 2
