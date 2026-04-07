@@ -34,6 +34,10 @@ argument_specs:
         description: Carbide SSH key group ID (overrides default)
         type: str
         required: false
+      ingress_cidr_range:
+        description: CIDR range for ingress IP allocation (e.g. 10.0.100.0/24)
+        type: str
+        required: true
       local_asn:
         description: Local ASN for MetalLB BGP speaker (shared by all workers)
         type: int

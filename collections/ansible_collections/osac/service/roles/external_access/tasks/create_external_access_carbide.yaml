@@ -1,19 +1,6 @@
 ---
-# Carbide-specific external access: allocate ingress IP from CIDR registry
-
-- name: Get cluster-fulfillment-ig Secret
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Secret
-    name: cluster-fulfillment-ig
-    namespace: "{{ external_access_cluster_fulfillment_namespace | default('default') }}"
-  register: cluster_fulfillment_secret_info
-  no_log: true
-
-- name: Extract INGRESS_CIDR from Secret
-  ansible.builtin.set_fact:
-    external_access_ingress_cidr_range: "{{ cluster_fulfillment_secret_info.resources[0].data.INGRESS_CIDR | b64decode }}"
-  when: cluster_fulfillment_secret_info.resources | length > 0
+# Carbide-specific external access: validate ingress CIDR and set shared IP variables
+# The ingress CIDR range is passed in via external_access_ingress_cidr_range variable
 
 - name: Validate INGRESS_CIDR
   ansible.builtin.assert:
@@ -21,11 +8,10 @@
       - external_access_ingress_cidr_range is defined
       - external_access_ingress_cidr_range | length > 0
       - external_access_ingress_cidr_range | ansible.utils.ipaddr
-    fail_msg: "INGRESS_CIDR not found or invalid in cluster-fulfillment-ig Secret"
+    fail_msg: "external_access_ingress_cidr_range is not defined or not a valid CIDR"
 
 # Set shared variables consumed by the DNS records step
 # For Carbide, API is reached directly via internal IP (no floating IP)
-# Ingress IP will be set after MetalLB allocates it from the CIDR range
 - name: Set shared IP variables for DNS
   ansible.builtin.set_fact:
     external_access_api_ip: "{{ external_access_api_internal_ip }}"
