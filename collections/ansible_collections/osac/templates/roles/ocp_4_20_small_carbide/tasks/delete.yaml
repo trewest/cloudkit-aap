@@ -5,16 +5,20 @@
       tasks_from: noop.yml
     delete_step_hosted_cluster_default:
       name: osac.service.hosted_cluster
-      tasks_from: main.yml
+      tasks_from: main.yaml
     delete_step_external_access_default:
       name: osac.service.external_access
-      tasks_from: main.yml
+      tasks_from: main.yaml
     delete_step_cluster_infra_default:
       name: osac.service.cluster_infra
-      tasks_from: main.yml
+      tasks_from: main.yaml
     delete_step_post_delete_hook_default:
       name: osac.templates.ocp_4_20_small_carbide
       tasks_from: noop.yml
+
+- name: Set infrastructure provider for backend routing
+  ansible.builtin.set_fact:
+    infrastructure_provider: nvidia_bmm
 
 - name: Step - Pre-delete hook
   ansible.builtin.include_role:

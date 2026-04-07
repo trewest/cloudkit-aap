@@ -31,6 +31,7 @@
     carbide_infra_state: present
     carbide_infra_name: "{{ cluster_infra_name }}"
     carbide_infra_namespace: "{{ cluster_working_namespace }}"
+    carbide_infra_node_requests: "{{ cluster_infra_node_requests }}"
     # Optional template parameters for using existing VPC/prefix
     carbide_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
     carbide_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"

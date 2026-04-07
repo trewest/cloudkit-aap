@@ -5,19 +5,23 @@
       tasks_from: noop.yml
     install_step_hosted_cluster_default:
       name: osac.service.hosted_cluster
-      tasks_from: main.yml
+      tasks_from: main.yaml
     install_step_cluster_infra_default:
       name: osac.service.cluster_infra
-      tasks_from: main.yml
+      tasks_from: main.yaml
     install_step_external_access_default:
       name: osac.service.external_access
-      tasks_from: main.yml
+      tasks_from: main.yaml
     install_step_retrieve_kubeconfig_default:
       name: osac.service.retrieve_kubeconfig
-      tasks_from: main.yml
+      tasks_from: main.yaml
     install_step_post_install_hook_default:
       name: osac.templates.ocp_4_20_small_carbide
       tasks_from: noop.yml
+
+- name: Set infrastructure provider for backend routing
+  ansible.builtin.set_fact:
+    infrastructure_provider: nvidia_bmm
 
 - name: Set OCP release image from template parameters if provided
   ansible.builtin.set_fact:
