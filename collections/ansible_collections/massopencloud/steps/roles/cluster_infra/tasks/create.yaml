@@ -36,6 +36,7 @@
     carbide_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
     carbide_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"
     carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
+    carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
 
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
