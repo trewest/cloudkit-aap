@@ -2,31 +2,34 @@
 # Create instances for a specific resource class
 # This task file is included from create_instances.yaml
 
-# Resolve instance type by looking up the resource class name directly in Carbide API.
+# Resolve instance type by listing all types for the site and matching by name.
 # Per the enhancement proposal, the hostclass name in nodeRequests matches the Carbide
 # instance type name — no user-maintained mapping dict needed.
-- name: "{{ node_request.resourceClass }} - Look up instance type by resource class name"
+- name: "{{ node_request.resourceClass }} - List instance types for site"
   nvidia.bare_metal.instance_type_info:
-    name: "{{ node_request.resourceClass }}"
+    site_id: "{{ nvidia_bmm_site_id }}"
     api_url: "{{ nvidia_bmm_api_url }}"
     api_token: "{{ nvidia_bmm_api_token }}"
     org: "{{ nvidia_bmm_org }}"
     api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
-  register: instance_type_lookup
+  register: instance_type_list
+
+- name: "{{ node_request.resourceClass }} - Find instance type by name"
+  ansible.builtin.set_fact:
+    instance_type_match: "{{ instance_type_list.resources | selectattr('name', 'equalto', node_request.resourceClass) | list }}"
 
 - name: "{{ node_request.resourceClass }} - Validate instance type was found"
   ansible.builtin.assert:
     that:
-      - instance_type_lookup.resource is defined
-      - instance_type_lookup.resource.id is defined
+      - instance_type_match | length > 0
     fail_msg: >
-      Carbide instance type '{{ node_request.resourceClass }}' not found.
+      Carbide instance type '{{ node_request.resourceClass }}' not found at site '{{ nvidia_bmm_site_id }}'.
+      Available instance types: {{ instance_type_list.resources | map(attribute='name') | list }}.
       The resource class name in nodeRequests must match a Carbide instance type name.
-      Verify the instance type exists at the configured site.
 
 - name: "{{ node_request.resourceClass }} - Set resolved instance type ID"
   ansible.builtin.set_fact:
-    current_instance_type_id: "{{ instance_type_lookup.resource.id }}"
+    current_instance_type_id: "{{ instance_type_match[0].id }}"
 
 - name: "{{ node_request.resourceClass }} - Display resolved instance type"
   ansible.builtin.debug:
