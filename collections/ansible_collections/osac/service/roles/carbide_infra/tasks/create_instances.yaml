@@ -207,7 +207,7 @@
           {{
             {
               cluster_order_label: carbide_infra_name,
-              esi_agent_resource_class_label: matched_agent.instance_info.resource_class,
+              carbide_agent_resource_class_label: matched_agent.instance_info.resource_class,
               'nvidia-bmm-instance-id': matched_agent.instance_info.instance_id
             }
           }}

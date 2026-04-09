@@ -22,6 +22,7 @@
 - name: Set infrastructure provider for backend routing
   ansible.builtin.set_fact:
     infrastructure_provider: nvidia_bmm
+    agent_resource_class_label: "{{ carbide_agent_resource_class_label }}"
 
 - name: Set OCP release image from template parameters if provided
   ansible.builtin.set_fact:
