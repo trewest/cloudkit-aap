@@ -13,7 +13,8 @@
     manage_agents_removed: >
       {{ manage_agents_allocated.resources | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]') }}
 
-- name: Move agents to idle agents network
+- name: Move agents to idle agents network (ESI only)
+  when: infrastructure_provider is not defined or infrastructure_provider != 'nvidia_bmm'
   ansible.builtin.include_role:
     name: massopencloud.esi.l2
     tasks_from: set_networks_for_node
