@@ -22,6 +22,7 @@
 #   - NVIDIA_BMM_DEFAULT_OS_ID     - Default operating system ID (optional)
 #   - NVIDIA_BMM_INGRESS_CIDR      - CIDR range for ingress IP allocation
 #   - NVIDIA_BMM_MGMT_VPC_ID       - Management cluster VPC ID for VPC peering
+#   - NVIDIA_BMM_IPXE_DNS_SERVER   - DNS server to inject into iPXE boot script (optional)
 
 # API Connection Settings
 # -----------------------
@@ -78,6 +79,10 @@ nvidia_bmm_default_operating_system_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_OS
 
 # Default SSH key group ID for instance access (optional fallback)
 nvidia_bmm_default_ssh_key_group_id: "{{ lookup('env', 'NVIDIA_BMM_SSH_KEY_GROUP_ID') | default('', true) }}"
+
+# DNS server to inject into iPXE boot script (optional)
+# When set, prepends 'set dns <server>' after the #!ipxe shebang
+carbide_infra_ipxe_dns_server: "{{ lookup('env', 'NVIDIA_BMM_IPXE_DNS_SERVER') | default('', true) }}"
 
 # Resource Labels
 # ---------------
