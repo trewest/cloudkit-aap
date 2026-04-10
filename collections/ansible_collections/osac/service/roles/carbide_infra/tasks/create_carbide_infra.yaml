@@ -98,7 +98,7 @@
       kind: ConfigMap
       metadata:
         name: "carbide-infra-{{ carbide_infra_name }}"
-        namespace: "{{ carbide_infra_namespace }}"
+        namespace: "{{ carbide_infra_configmap_namespace }}"
         labels:
           managed-by: osac
           provider: carbide

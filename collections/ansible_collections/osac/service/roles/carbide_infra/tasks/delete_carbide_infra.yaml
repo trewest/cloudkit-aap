@@ -12,7 +12,7 @@
     api_version: v1
     kind: ConfigMap
     name: "carbide-infra-{{ carbide_infra_name }}"
-    namespace: "{{ carbide_infra_namespace }}"
+    namespace: "{{ carbide_infra_configmap_namespace }}"
   register: carbide_infra_configmap
   ignore_errors: true  # ConfigMap may not exist (manual deletion, etc.)
 
@@ -104,7 +104,7 @@
     api_version: v1
     kind: ConfigMap
     name: "carbide-infra-{{ carbide_infra_name }}"
-    namespace: "{{ carbide_infra_namespace }}"
+    namespace: "{{ carbide_infra_configmap_namespace }}"
   ignore_errors: true
 
 - name: Carbide infrastructure deletion complete

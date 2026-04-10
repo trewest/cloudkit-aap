@@ -10,6 +10,10 @@ carbide_infra_name: ""
 # Kubernetes namespace for ConfigMap state storage
 carbide_infra_namespace: ""
 
+# Namespace for the infrastructure state ConfigMap
+# Must be a persistent namespace that survives cluster deletion
+carbide_infra_configmap_namespace: "hardware-inventory"
+
 # VPC naming prefix (per D-09: osac-vpc-{cluster_name})
 carbide_infra_vpc_name_prefix: "osac-vpc"
 
