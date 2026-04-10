@@ -24,6 +24,7 @@
     - name: Remove cluster IP from registry on failure
       kubernetes.core.k8s:
         state: present
+        force: true
         definition:
           apiVersion: v1
           kind: ConfigMap

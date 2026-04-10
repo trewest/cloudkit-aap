@@ -1,5 +1,7 @@
 ---
 # Carbide-specific cleanup: remove allocated IP from registry
+# Uses force: true to replace the ConfigMap (not merge) so that
+# removing a key from the data dict actually takes effect.
 
 - name: Read IP registry ConfigMap
   kubernetes.core.k8s_info:
@@ -16,6 +18,7 @@
     - ip_registry_info.resources[0].data is defined
   kubernetes.core.k8s:
     state: present
+    force: true
     definition:
       apiVersion: v1
       kind: ConfigMap
