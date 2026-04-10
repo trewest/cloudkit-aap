@@ -59,11 +59,18 @@
 # Peer ASN discovery: oc debug node to curl Carbide metadata service
 # =============================================================================
 
+- name: Write kubeconfig to temporary file for oc debug
+  ansible.builtin.copy:
+    content: "{{ metallb_ingress_admin_kubeconfig | to_nice_yaml if metallb_ingress_admin_kubeconfig is mapping else metallb_ingress_admin_kubeconfig }}"
+    dest: "/tmp/metallb-bgp-kubeconfig.yaml"
+    mode: '0600'
+  register: bgp_kubeconfig_file
+
 - name: Discover peer ASN from Carbide metadata service
   ansible.builtin.command:
     cmd: >-
       oc debug node/{{ item.metadata.name }}
-      --kubeconfig={{ metallb_ingress_admin_kubeconfig }}
+      --kubeconfig={{ bgp_kubeconfig_file.dest }}
       -- chroot /host curl -s --max-time 10 http://169.254.169.254:7777/latest/meta-data/asn
   register: asn_result
   retries: 3
@@ -86,6 +93,13 @@
   loop_control:
     label: "{{ item.item.metadata.name }}"
   when: item.rc == 0 and item.stdout | trim | length > 0
+
+- name: Clean up temporary kubeconfig file
+  ansible.builtin.file:
+    path: "{{ bgp_kubeconfig_file.dest }}"
+    state: absent
+  when: bgp_kubeconfig_file.dest is defined
+  ignore_errors: yes
 
 # =============================================================================
 # Build final BGP parameters list
