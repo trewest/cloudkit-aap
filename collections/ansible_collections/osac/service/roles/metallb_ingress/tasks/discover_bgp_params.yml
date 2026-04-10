@@ -1,6 +1,9 @@
 ---
 # This file discovers BGP parameters (gateway IP and peer ASN) from worker nodes
 # for configuring MetalLB BGPPeer resources in Carbide-backed hosted clusters.
+#
+# Gateway IP: extracted from k8s.ovn.org/l3-gateway-config node annotation
+# Peer ASN: discovered via oc debug node running curl against Carbide metadata service
 
 - name: Get worker nodes from hosted cluster
   kubernetes.core.k8s_info:
@@ -31,107 +34,95 @@
   loop_control:
     label: "{{ item.metadata.name }}"
 
+# =============================================================================
+# Gateway discovery: extract from OVN node annotation (no exec needed)
+# =============================================================================
+
+- name: Extract gateway from l3-gateway-config annotation
+  ansible.builtin.set_fact:
+    worker_gateway_map: >-
+      {{
+        worker_gateway_map | default({}) | combine({
+          item.metadata.name: (item.metadata.annotations['k8s.ovn.org/l3-gateway-config'] | from_json | dict2items | first).value['next-hop']
+        })
+      }}
+  loop: "{{ worker_nodes_info.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: item.metadata.annotations['k8s.ovn.org/l3-gateway-config'] is defined
+
+- name: Display discovered gateways
+  ansible.builtin.debug:
+    msg: "Worker gateways: {{ worker_gateway_map | default({}) }}"
+
+# =============================================================================
+# Peer ASN discovery: oc debug node to curl Carbide metadata service
+# =============================================================================
+
+- name: Discover peer ASN from Carbide metadata service
+  ansible.builtin.command:
+    cmd: >-
+      oc debug node/{{ item.metadata.name }}
+      --kubeconfig={{ metallb_ingress_admin_kubeconfig }}
+      -- chroot /host curl -s --max-time 10 http://169.254.169.254:7777/latest/meta-data/asn
+  register: asn_result
+  retries: 3
+  delay: 10
+  until: asn_result.rc == 0 and asn_result.stdout | trim | length > 0
+  loop: "{{ worker_nodes_info.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  ignore_errors: yes
+
+- name: Extract peer ASN from oc debug output
+  ansible.builtin.set_fact:
+    worker_asn_map: >-
+      {{
+        worker_asn_map | default({}) | combine({
+          item.item.metadata.name: (item.stdout | trim | int)
+        })
+      }}
+  loop: "{{ asn_result.results }}"
+  loop_control:
+    label: "{{ item.item.metadata.name }}"
+  when: item.rc == 0 and item.stdout | trim | length > 0
+
+# =============================================================================
+# Build final BGP parameters list
+# =============================================================================
+
 - name: Initialize worker BGP parameters list
   ansible.builtin.set_fact:
     worker_bgp_params: []
 
-- name: Discover BGP parameters for each worker node
-  block:
-    - name: Discover default gateway on worker node
-      kubernetes.core.k8s_exec:
-        kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
-        namespace: default
-        pod: "debug-{{ item.metadata.name }}"
-        command: chroot /host ip route show default
-      register: gateway_result
-      retries: 3
-      delay: 5
-      until: gateway_result is successful and gateway_result.stdout | length > 0
-      loop: "{{ worker_nodes_info.resources }}"
-      loop_control:
-        label: "{{ item.metadata.name }}"
-      ignore_errors: yes
-
-    - name: Extract gateway IP from route output
-      ansible.builtin.set_fact:
-        worker_gateway_map: >-
-          {{
-            worker_gateway_map | default({}) | combine({
-              item.item.metadata.name: (item.stdout | regex_search('default via (\\S+)', '\\1') | first)
-            })
-          }}
-      loop: "{{ gateway_result.results }}"
-      loop_control:
-        label: "{{ item.item.metadata.name }}"
-      when: item is successful and item.stdout | length > 0
-
-    - name: Discover peer ASN from Carbide metadata service
-      kubernetes.core.k8s_exec:
-        kubeconfig: "{{ metallb_ingress_admin_kubeconfig }}"
-        namespace: default
-        pod: "debug-{{ item.metadata.name }}"
-        command: chroot /host curl -s --max-time 10 http://169.254.169.254:7777/latest/meta-data/asn
-      register: asn_result
-      retries: 3
-      delay: 5
-      until: asn_result is successful and asn_result.stdout | length > 0
-      loop: "{{ worker_nodes_info.resources }}"
-      loop_control:
-        label: "{{ item.metadata.name }}"
-      ignore_errors: yes
-
-    - name: Extract peer ASN from metadata service response
-      ansible.builtin.set_fact:
-        worker_asn_map: >-
-          {{
-            worker_asn_map | default({}) | combine({
-              item.item.metadata.name: (item.stdout | int)
-            })
-          }}
-      loop: "{{ asn_result.results }}"
-      loop_control:
-        label: "{{ item.item.metadata.name }}"
-      when: item is successful and item.stdout | length > 0 and item.stdout | int >= 1
-
-    - name: Build worker BGP parameters list
-      ansible.builtin.set_fact:
-        worker_bgp_params: >-
-          {{
-            worker_bgp_params + [{
-              'hostname': item.metadata.name,
-              'gateway': worker_gateway_map[item.metadata.name],
-              'peer_asn': worker_asn_map[item.metadata.name]
-            }]
-          }}
-      loop: "{{ worker_nodes_info.resources }}"
-      loop_control:
-        label: "{{ item.metadata.name }}"
-      when:
-        - item.metadata.name in worker_gateway_map
-        - item.metadata.name in worker_asn_map
-
-  rescue:
-    - name: Fail with clear error message
-      ansible.builtin.fail:
-        msg: "Failed to discover BGP parameters for worker nodes. Gateway discovery or ASN metadata service may be unreachable."
+- name: Build worker BGP parameters list
+  ansible.builtin.set_fact:
+    worker_bgp_params: >-
+      {{
+        worker_bgp_params + [{
+          'hostname': item.metadata.name,
+          'gateway': worker_gateway_map[item.metadata.name],
+          'peer_asn': worker_asn_map[item.metadata.name]
+        }]
+      }}
+  loop: "{{ worker_nodes_info.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when:
+    - item.metadata.name in worker_gateway_map | default({})
+    - item.metadata.name in worker_asn_map | default({})
 
 - name: Validate discovered BGP parameters
   ansible.builtin.assert:
     that:
       - worker_bgp_params | length == worker_nodes_info.resources | length
       - worker_bgp_params | length > 0
-    fail_msg: "BGP parameter discovery incomplete. Expected {{ worker_nodes_info.resources | length }} workers, discovered {{ worker_bgp_params | length }}."
+    fail_msg: >
+      BGP parameter discovery incomplete. Expected {{ worker_nodes_info.resources | length }} workers,
+      discovered {{ worker_bgp_params | length }}.
+      Gateways found: {{ worker_gateway_map | default({}) | length }}.
+      ASNs found: {{ worker_asn_map | default({}) | length }}.
     success_msg: "Discovered BGP parameters for {{ worker_bgp_params | length }} workers."
-
-- name: Validate peer ASN values are in valid range
-  ansible.builtin.assert:
-    that:
-      - item.peer_asn | int >= 1
-      - item.peer_asn | int <= 4294967295
-    fail_msg: "Invalid peer ASN {{ item.peer_asn }} for worker {{ item.hostname }}. ASN must be between 1 and 4294967295."
-  loop: "{{ worker_bgp_params }}"
-  loop_control:
-    label: "{{ item.hostname }}"
 
 - name: Log discovered BGP parameters summary
   ansible.builtin.debug:
