@@ -100,10 +100,18 @@
     api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
   register: carbide_vpc_peering_result
 
+- name: Display VPC peering result
+  when: carbide_vpc_peering_result is defined and carbide_vpc_peering_result is not skipped
+  ansible.builtin.debug:
+    var: carbide_vpc_peering_result
+
 - name: Store VPC peering ID
-  when: carbide_vpc_peering_result.resource is defined
+  when:
+    - carbide_vpc_peering_result is defined
+    - carbide_vpc_peering_result is not skipped
+    - carbide_vpc_peering_result.resource is defined or carbide_vpc_peering_result.id is defined
   ansible.builtin.set_fact:
-    carbide_vpc_peering_id: "{{ carbide_vpc_peering_result.resource.id }}"
+    carbide_vpc_peering_id: "{{ carbide_vpc_peering_result.resource.id | default(carbide_vpc_peering_result.id | default('')) }}"
 
 # Instance provisioning (Phase 2)
 - name: Provision Carbide instances into cluster VPC
