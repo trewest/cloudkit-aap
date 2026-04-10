@@ -84,6 +84,27 @@
   ansible.builtin.debug:
     msg: "Using VPC: {{ carbide_vpc_id }}, Prefix: {{ carbide_vpc_prefix_id }}"
 
+# Create VPC peering with management cluster so nodes can reach the control plane
+- name: Create VPC peering with management cluster
+  when: nvidia_bmm_mgmt_vpc_id | default('') | length > 0
+  nvidia.bare_metal.vpc_peering:
+    state: present
+    vpc1_id: "{{ carbide_vpc_id }}"
+    vpc2_id: "{{ nvidia_bmm_mgmt_vpc_id }}"
+    site_id: "{{ nvidia_bmm_site_id }}"
+    wait: true
+    wait_timeout: 300
+    api_url: "{{ nvidia_bmm_api_url }}"
+    api_token: "{{ nvidia_bmm_api_token }}"
+    org: "{{ nvidia_bmm_org }}"
+    api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+  register: carbide_vpc_peering_result
+
+- name: Store VPC peering ID
+  when: carbide_vpc_peering_result.resource is defined
+  ansible.builtin.set_fact:
+    carbide_vpc_peering_id: "{{ carbide_vpc_peering_result.resource.id }}"
+
 # Instance provisioning (Phase 2)
 - name: Provision Carbide instances into cluster VPC
   ansible.builtin.include_tasks: create_instances.yaml
@@ -110,6 +131,7 @@
         vpc_created: "{{ carbide_vpc_created | default(false) | string }}"
         prefix_created: "{{ carbide_prefix_created | default(false) | string }}"
         instance_ids: "{{ carbide_all_instance_ids | default([]) | to_json }}"
+        vpc_peering_id: "{{ carbide_vpc_peering_id | default('') }}"
         site_id: "{{ nvidia_bmm_site_id }}"
         tenant_id: "{{ nvidia_bmm_tenant_id }}"
 

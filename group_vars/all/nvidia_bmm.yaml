@@ -21,6 +21,7 @@
 #   - NVIDIA_BMM_SSH_KEY_GROUP_ID  - Default SSH key group (optional)
 #   - NVIDIA_BMM_DEFAULT_OS_ID     - Default operating system ID (optional)
 #   - NVIDIA_BMM_INGRESS_CIDR      - CIDR range for ingress IP allocation
+#   - NVIDIA_BMM_MGMT_VPC_ID       - Management cluster VPC ID for VPC peering
 
 # API Connection Settings
 # -----------------------
@@ -59,6 +60,10 @@ nvidia_bmm_default_prefix_length: 28
 
 # Default IP block for VPC prefix allocation (optional fallback)
 nvidia_bmm_default_ip_block_id: "{{ lookup('env', 'NVIDIA_BMM_DEFAULT_IP_BLOCK_ID') | default('', true) }}"
+
+# Management cluster VPC ID for VPC peering
+# Per-cluster VPCs are peered with this VPC so nodes can communicate with the management cluster
+nvidia_bmm_mgmt_vpc_id: "{{ lookup('env', 'NVIDIA_BMM_MGMT_VPC_ID') | default('', true) }}"
 
 # External Access Configuration
 # -----------------------------
