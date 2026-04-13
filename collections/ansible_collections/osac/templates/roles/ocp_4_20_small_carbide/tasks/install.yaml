@@ -58,6 +58,32 @@
     cluster_infra_namespace: "{{ cluster_working_namespace }}"
     cluster_infra_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
 
+- name: Look up Tenant CR to get BGP ASN
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: Tenant
+    name: "{{ cluster_order.metadata.tenants | first }}"
+    namespace: "{{ lookup('env', 'POD_NAMESPACE') }}"
+  register: tenant_cr_result
+
+- name: Extract BGP ASN from Tenant annotation
+  ansible.builtin.set_fact:
+    tenant_bgp_asn: "{{ tenant_cr_result.resources[0].metadata.annotations['osac.io/bgp-asn'] }}"
+  when:
+    - tenant_cr_result.resources | length > 0
+    - tenant_cr_result.resources[0].metadata.annotations is defined
+    - "'osac.io/bgp-asn' in tenant_cr_result.resources[0].metadata.annotations"
+
+- name: Validate BGP ASN was found
+  ansible.builtin.assert:
+    that:
+      - tenant_bgp_asn is defined
+      - tenant_bgp_asn | int >= 1
+    fail_msg: >
+      BGP ASN not found on Tenant CR '{{ cluster_order.metadata.tenants | first }}'
+      in namespace '{{ lookup('env', 'POD_NAMESPACE') }}'.
+      Set the osac.io/bgp-asn annotation on the Tenant resource.
+
 - name: Step - Configure external access
   ansible.builtin.include_role:
     name: "{{ (install_step_external_access_override | default(install_step_external_access_default)).name }}"
@@ -67,7 +93,7 @@
     external_access_state: present
     external_access_namespace: "{{ cluster_working_namespace }}"
     external_access_ingress_cidr_range: "{{ nvidia_bmm_ingress_cidr }}"
-    external_access_local_asn: "{{ template_parameters.local_asn }}"
+    external_access_local_asn: "{{ tenant_bgp_asn }}"
 
 - name: Step - Retrieve kubeconfig
   ansible.builtin.include_role:
