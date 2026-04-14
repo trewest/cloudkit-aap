@@ -58,11 +58,15 @@
     cluster_infra_namespace: "{{ cluster_working_namespace }}"
     cluster_infra_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
 
+- name: Extract tenant name from ClusterOrder annotation
+  ansible.builtin.set_fact:
+    tenant_name: "{{ cluster_order.metadata.annotations['osac.openshift.io/tenant'] }}"
+
 - name: Look up Tenant CR to get BGP ASN
   kubernetes.core.k8s_info:
     api_version: osac.openshift.io/v1alpha1
     kind: Tenant
-    name: "{{ cluster_order.metadata.tenants | first }}"
+    name: "{{ tenant_name }}"
     namespace: "{{ lookup('env', 'POD_NAMESPACE') }}"
   register: tenant_cr_result
 
@@ -80,7 +84,7 @@
       - tenant_bgp_asn is defined
       - tenant_bgp_asn | int >= 1
     fail_msg: >
-      BGP ASN not found on Tenant CR '{{ cluster_order.metadata.tenants | first }}'
+      BGP ASN not found on Tenant CR '{{ tenant_name }}'
       in namespace '{{ lookup('env', 'POD_NAMESPACE') }}'.
       Set the osac.io/bgp-asn annotation on the Tenant resource.
 
