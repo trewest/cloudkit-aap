@@ -20,7 +20,9 @@ def next_available_ip(cidr, allocated_ips):
     for ip in network.hosts():
         if str(ip) not in used:
             return str(ip)
-    return None
+    raise Exception(
+        "No available IPs in %s. All %d host addresses are allocated." % (cidr, len(used))
+    )
 
 
 class FilterModule:

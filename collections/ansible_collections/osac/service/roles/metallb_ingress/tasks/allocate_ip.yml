@@ -48,10 +48,12 @@
     metallb_ingress_ip: "{{ ingress_cidr_range | osac.service.next_available_ip(allocated_ips) }}"
   when: metallb_ingress_ip is not defined
 
-- name: Fail if no available IPs in CIDR range
-  ansible.builtin.fail:
-    msg: "No available IPs in {{ ingress_cidr_range }}. Current allocations: {{ allocated_ips | length }}"
-  when: metallb_ingress_ip is not defined or metallb_ingress_ip == 'None'
+- name: Validate allocated IP
+  ansible.builtin.assert:
+    that:
+      - metallb_ingress_ip is defined
+      - metallb_ingress_ip | ansible.utils.ipaddr
+    fail_msg: "IP allocation failed for {{ ingress_cidr_range }}. Got: {{ metallb_ingress_ip | default('undefined') }}"
 
 - name: Update IP registry ConfigMap with new allocation
   kubernetes.core.k8s:
