@@ -87,12 +87,75 @@
     manage_agents_resource_class: "{{ item.resourceClass }}"
   loop: "{{ updated_cluster_infra_node_requests }}"
 
+# Carbide scale-down: capture instance IDs before detachment removes labels
+- name: Capture Carbide instance IDs from removed agents (before detachment)
+  when: infrastructure_provider == 'nvidia_bmm'
+  block:
+    - name: List agents currently labeled with the cluster order label
+      kubernetes.core.k8s_info:
+        kind: Agent
+        api_version: agent-install.openshift.io/v1beta1
+        namespace: "{{ default_agent_namespace }}"
+        label_selectors:
+          - "{{ cluster_order_label }}={{ cluster_infra_name }}"
+      register: carbide_allocated_agents
+
+    - name: Filter agents removed from the cluster
+      ansible.builtin.set_fact:
+        carbide_removed_agents: >
+          {{ carbide_allocated_agents.resources | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]') }}
+
+    - name: Extract instance IDs from removed agents
+      ansible.builtin.set_fact:
+        carbide_removed_instance_ids: >-
+          {{
+            carbide_removed_agents |
+            selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') |
+            map(attribute='metadata.labels.nvidia-bmm-instance-id') |
+            list
+          }}
+
+    - name: Extract hostnames for BGPPeer cleanup
+      ansible.builtin.set_fact:
+        carbide_removed_agent_hostnames: >-
+          {{
+            carbide_removed_agents |
+            selectattr('spec.hostname', 'defined') |
+            map(attribute='spec.hostname') |
+            list
+          }}
+
+    - name: Display scale-down cleanup plan
+      ansible.builtin.debug:
+        msg: "Scale-down cleanup: {{ carbide_removed_instance_ids | length }} instances, {{ carbide_removed_agent_hostnames | length }} BGPPeers to clean up"
+
 - name: Detach agents from cluster
   ansible.builtin.include_role:
     name: manage_agents
     tasks_from: detach_and_unlabel_all_removed_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
+
+# Carbide scale-down: destroy removed instances and clean up BGPPeers
+- name: Clean up Carbide instances for removed agents
+  when:
+    - infrastructure_provider == 'nvidia_bmm'
+    - carbide_removed_instance_ids is defined
+    - carbide_removed_instance_ids | length > 0
+  ansible.builtin.include_role:
+    name: osac.service.carbide_infra
+    tasks_from: scale_down_cleanup
+  vars:
+    carbide_infra_name: "{{ cluster_infra_name }}"
+
+- name: Clean up BGPPeers for removed agents
+  when:
+    - infrastructure_provider == 'nvidia_bmm'
+    - carbide_removed_agent_hostnames is defined
+    - carbide_removed_agent_hostnames | length > 0
+  ansible.builtin.include_role:
+    name: osac.service.metallb_ingress
+    tasks_from: delete_bgp_peers
 
 - name: Select and label new Agent resources
   ansible.builtin.include_role:
