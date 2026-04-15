@@ -58,9 +58,17 @@
     cluster_infra_namespace: "{{ cluster_working_namespace }}"
     cluster_infra_node_requests: "{{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') }}"
 
+- name: Fetch live ClusterOrder for annotations
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: ClusterOrder
+    name: "{{ cluster_order.metadata.name }}"
+    namespace: "{{ lookup('env', 'POD_NAMESPACE') | default(cluster_order.metadata.namespace, true) }}"
+  register: live_cluster_order
+
 - name: Extract tenant name from ClusterOrder annotation
   ansible.builtin.set_fact:
-    tenant_name: "{{ cluster_order.metadata.annotations['osac.openshift.io/tenant'] }}"
+    tenant_name: "{{ live_cluster_order.resources[0].metadata.annotations['osac.openshift.io/tenant'] }}"
 
 - name: Look up Tenant CR to get BGP ASN
   kubernetes.core.k8s_info:
