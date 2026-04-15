@@ -1,0 +1,72 @@
+---
+# Scale-down cleanup: destroy removed Carbide instances and update ConfigMap
+# This file handles a SUBSET of instances (removed agents only, not all instances)
+# Called by cluster_infra workflow during scale-down operations
+
+- name: Scale-down instance cleanup
+  when: carbide_removed_instance_ids is defined and carbide_removed_instance_ids | length > 0
+  block:
+
+    - name: Delete removed Carbide instances
+      nvidia.bare_metal.instance:
+        state: absent
+        id: "{{ instance_id }}"
+        wait: true
+        wait_timeout: "{{ carbide_infra_wait_timeout | default(1800) }}"
+        api_url: "{{ nvidia_bmm_api_url }}"
+        api_token: "{{ nvidia_bmm_api_token }}"
+        org: "{{ nvidia_bmm_org }}"
+        api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+      loop: "{{ carbide_removed_instance_ids }}"
+      loop_control:
+        loop_var: instance_id
+        label: "Deleting instance {{ instance_id }}"
+      ignore_errors: true  # Instance may have been manually deleted
+
+    - name: Read current carbide-infra ConfigMap
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ConfigMap
+        name: "carbide-infra-{{ cluster_infra_name }}"
+        namespace: "{{ carbide_infra_configmap_namespace | default('hardware-inventory') }}"
+      register: carbide_configmap_current
+
+    - name: Compute updated instance_ids
+      when: carbide_configmap_current.resources | length > 0
+      ansible.builtin.set_fact:
+        carbide_updated_instance_ids: >-
+          {{
+            (carbide_configmap_current.resources[0].data.instance_ids | default('[]') | from_json) |
+            difference(carbide_removed_instance_ids) |
+            to_json
+          }}
+
+    - name: Write updated ConfigMap
+      when: carbide_configmap_current.resources | length > 0
+      kubernetes.core.k8s:
+        state: present
+        force: true
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: "carbide-infra-{{ cluster_infra_name }}"
+            namespace: "{{ carbide_infra_configmap_namespace | default('hardware-inventory') }}"
+            labels:
+              managed-by: osac
+              provider: carbide
+              cluster: "{{ cluster_infra_name }}"
+          data:
+            vpc_id: "{{ carbide_configmap_current.resources[0].data.vpc_id }}"
+            vpc_name: "{{ carbide_configmap_current.resources[0].data.vpc_name }}"
+            vpc_prefix_id: "{{ carbide_configmap_current.resources[0].data.vpc_prefix_id }}"
+            vpc_created: "{{ carbide_configmap_current.resources[0].data.vpc_created }}"
+            prefix_created: "{{ carbide_configmap_current.resources[0].data.prefix_created }}"
+            instance_ids: "{{ carbide_updated_instance_ids }}"
+            vpc_peering_id: "{{ carbide_configmap_current.resources[0].data.vpc_peering_id | default('') }}"
+            site_id: "{{ carbide_configmap_current.resources[0].data.site_id }}"
+            tenant_id: "{{ carbide_configmap_current.resources[0].data.tenant_id }}"
+
+    - name: Display cleanup summary
+      ansible.builtin.debug:
+        msg: "Scale-down cleanup: destroyed {{ carbide_removed_instance_ids | length }} instances, updated ConfigMap"
