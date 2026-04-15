@@ -38,6 +38,16 @@
     carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
     carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
 
+# Collect names of agents provisioned in THIS run so the scale-down logic
+# does not treat them as "removed".  Newly provisioned agents will not have
+# clusterdeployment-namespace yet (the HostedCluster hasn't claimed them),
+# but they are NOT removed — they are waiting to be attached.
+- name: Collect names of newly provisioned Carbide agents
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.set_fact:
+    carbide_protected_agent_names: >-
+      {{ carbide_matched_agents | default([]) | map(attribute='agent_name') | list }}
+
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
 # we run detach_and_unlabel_all_removed_agents, causing them to be
@@ -100,10 +110,12 @@
           - "{{ cluster_order_label }}={{ cluster_infra_name }}"
       register: carbide_allocated_agents
 
-    - name: Filter agents removed from the cluster
+    - name: Filter agents removed from the cluster (excluding newly provisioned)
       ansible.builtin.set_fact:
-        carbide_removed_agents: >
-          {{ carbide_allocated_agents.resources | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]') }}
+        carbide_removed_agents: >-
+          {{ carbide_allocated_agents.resources
+             | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
+             | json_query('[?!contains(`' + (carbide_protected_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
 
     - name: Extract instance IDs from removed agents
       ansible.builtin.set_fact:
@@ -135,6 +147,7 @@
     tasks_from: detach_and_unlabel_all_removed_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
+    manage_agents_protected_agents: "{{ carbide_protected_agent_names | default([]) }}"
 
 # Carbide scale-down: destroy removed instances and clean up BGPPeers
 - name: Clean up Carbide instances for removed agents
