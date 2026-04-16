@@ -38,16 +38,6 @@
     carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
     carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
 
-# Collect names of agents provisioned in THIS run so the scale-down logic
-# does not treat them as "removed".  Newly provisioned agents will not have
-# clusterdeployment-namespace yet (the HostedCluster hasn't claimed them),
-# but they are NOT removed — they are waiting to be attached.
-- name: Collect names of newly provisioned Carbide agents
-  when: infrastructure_provider == 'nvidia_bmm'
-  ansible.builtin.set_fact:
-    carbide_protected_agent_names: >-
-      {{ carbide_matched_agents | default([]) | map(attribute='agent_name') | list }}
-
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
 # we run detach_and_unlabel_all_removed_agents, causing them to be
@@ -59,6 +49,24 @@
     kind: NodePool
     namespace: "{{ cluster_working_namespace }}"
   register: current_node_pools
+
+# Only protect agents for resource classes being added for the FIRST time
+# (no existing NodePool).  For existing resource classes, HyperShift decides
+# which agent to detach during scale-down — it is NOT necessarily the
+# last-created instance.  Protecting all matched agents would prevent cleanup
+# of whichever agent HyperShift chose to remove.
+- name: Collect existing resource classes from NodePools
+  ansible.builtin.set_fact:
+    existing_resource_classes: >-
+      {{ current_node_pools.resources
+         | json_query('[].metadata.labels."' + (agent_resource_class_label | default(esi_agent_resource_class_label)) + '"') }}
+
+- name: Collect names of newly provisioned Carbide agents for new resource classes only
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.set_fact:
+    carbide_protected_agent_names: >-
+      {{ carbide_matched_agents | default([])
+         | json_query('[?!contains(`' + (existing_resource_classes | default([]) | to_json) + '`, instance_info.resource_class)].agent_name') }}
 
 - name: Set resource classes included in the request
   ansible.builtin.set_fact:
