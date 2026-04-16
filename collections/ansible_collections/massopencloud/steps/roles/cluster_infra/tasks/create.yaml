@@ -23,6 +23,29 @@
   ansible.builtin.set_fact:
     cluster_infra_network_name: "network-{{ cluster_infra_name }}"
 
+# Snapshot agents that exist BEFORE carbide_infra runs.  After carbide_infra
+# creates new instances (scale-up), the new agents will lack
+# clusterdeployment-namespace just like agents that HyperShift detached
+# (scale-down).  By recording which agents existed before, we can tell them
+# apart: agents in the snapshot that later lack clusterdeployment-namespace
+# were detached; agents NOT in the snapshot are newly created and must not
+# be cleaned up.
+- name: Snapshot pre-existing Carbide agents
+  when: infrastructure_provider == 'nvidia_bmm'
+  kubernetes.core.k8s_info:
+    kind: Agent
+    api_version: agent-install.openshift.io/v1beta1
+    namespace: "{{ default_agent_namespace }}"
+    label_selectors:
+      - "{{ cluster_order_label }}={{ cluster_infra_name }}"
+  register: pre_carbide_agents
+
+- name: Store pre-existing agent names
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.set_fact:
+    pre_carbide_agent_names: >-
+      {{ (pre_carbide_agents.resources | default([])) | map(attribute='metadata.name') | list }}
+
 - name: Create Carbide cluster infrastructure
   when: infrastructure_provider == 'nvidia_bmm'
   ansible.builtin.include_role:
@@ -38,6 +61,15 @@
     carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
     carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
 
+# Protect agents created in THIS run — those matched by carbide_infra but
+# not in the pre-existing snapshot.
+- name: Compute protected agent names (new agents only)
+  when: infrastructure_provider == 'nvidia_bmm'
+  ansible.builtin.set_fact:
+    carbide_protected_agent_names: >-
+      {{ (carbide_matched_agents | default([]) | map(attribute='agent_name') | list)
+         | difference(pre_carbide_agent_names | default([])) }}
+
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
 # we run detach_and_unlabel_all_removed_agents, causing them to be
@@ -49,24 +81,6 @@
     kind: NodePool
     namespace: "{{ cluster_working_namespace }}"
   register: current_node_pools
-
-# Only protect agents for resource classes being added for the FIRST time
-# (no existing NodePool).  For existing resource classes, HyperShift decides
-# which agent to detach during scale-down — it is NOT necessarily the
-# last-created instance.  Protecting all matched agents would prevent cleanup
-# of whichever agent HyperShift chose to remove.
-- name: Collect existing resource classes from NodePools
-  ansible.builtin.set_fact:
-    existing_resource_classes: >-
-      {{ current_node_pools.resources
-         | json_query('[].metadata.labels."' + (agent_resource_class_label | default(esi_agent_resource_class_label)) + '"') }}
-
-- name: Collect names of newly provisioned Carbide agents for new resource classes only
-  when: infrastructure_provider == 'nvidia_bmm'
-  ansible.builtin.set_fact:
-    carbide_protected_agent_names: >-
-      {{ carbide_matched_agents | default([])
-         | json_query('[?!contains(`' + (existing_resource_classes | default([]) | to_json) + '`, instance_info.resource_class)].agent_name') }}
 
 - name: Set resource classes included in the request
   ansible.builtin.set_fact:
@@ -118,12 +132,12 @@
           - "{{ cluster_order_label }}={{ cluster_infra_name }}"
       register: carbide_allocated_agents
 
-    - name: Filter agents removed from the cluster (excluding newly provisioned)
+    - name: Filter agents removed from the cluster (pre-existing agents only)
       ansible.builtin.set_fact:
         carbide_removed_agents: >-
           {{ carbide_allocated_agents.resources
              | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
-             | json_query('[?!contains(`' + (carbide_protected_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
+             | json_query('[?contains(`' + (pre_carbide_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
 
     - name: Extract instance IDs from removed agents
       ansible.builtin.set_fact:
