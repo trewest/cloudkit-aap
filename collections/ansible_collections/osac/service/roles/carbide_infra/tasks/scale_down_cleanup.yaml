@@ -7,6 +7,28 @@
   when: carbide_removed_instance_ids is defined and carbide_removed_instance_ids | length > 0
   block:
 
+    # Re-exchange credentials for a fresh token.  The token obtained at the
+    # start of the run may have expired while waiting for agents to be removed.
+    - name: Exchange client credentials for fresh JWT token
+      ansible.builtin.uri:
+        url: "{{ nvidia_bmm_ssa_token_url }}"
+        method: POST
+        url_username: "{{ nvidia_bmm_client_id }}"
+        url_password: "{{ nvidia_bmm_client_secret }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          scope: "{{ nvidia_bmm_oauth_scope | default(omit) }}"
+        status_code: 200
+      register: carbide_cleanup_token_response
+      no_log: true
+
+    - name: Set fresh Carbide API token
+      ansible.builtin.set_fact:
+        nvidia_bmm_api_token: "{{ carbide_cleanup_token_response.json.access_token }}"
+      no_log: true
+
     - name: Delete removed Carbide instances
       nvidia.bare_metal.instance:
         state: absent
@@ -60,8 +82,8 @@
             vpc_id: "{{ carbide_configmap_current.resources[0].data.vpc_id }}"
             vpc_name: "{{ carbide_configmap_current.resources[0].data.vpc_name }}"
             vpc_prefix_id: "{{ carbide_configmap_current.resources[0].data.vpc_prefix_id }}"
-            vpc_created: "{{ carbide_configmap_current.resources[0].data.vpc_created }}"
-            prefix_created: "{{ carbide_configmap_current.resources[0].data.prefix_created }}"
+            vpc_created: "{{ carbide_configmap_current.resources[0].data.vpc_created | string }}"
+            prefix_created: "{{ carbide_configmap_current.resources[0].data.prefix_created | string }}"
             instance_ids: "{{ carbide_updated_instance_ids }}"
             vpc_peering_id: "{{ carbide_configmap_current.resources[0].data.vpc_peering_id | default('') }}"
             site_id: "{{ carbide_configmap_current.resources[0].data.site_id }}"
