@@ -163,6 +163,7 @@
     - infrastructure_provider == 'nvidia_bmm'
     - carbide_removed_instance_ids is defined
     - carbide_removed_instance_ids | length > 0
+  ignore_errors: true
   ansible.builtin.include_role:
     name: osac.service.carbide_infra
     tasks_from: scale_down_cleanup
