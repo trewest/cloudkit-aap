@@ -99,6 +99,21 @@
     wait_for_kubeconfig: "{{ admin_kubeconfig }}"
 
 # =============================================================================
+# Scale-down: clean up BGPPeers for removed agents (requires kubeconfig)
+# carbide_removed_agent_hostnames is set by cluster_infra during scale-down
+# =============================================================================
+
+- name: Clean up BGPPeers for removed agents
+  when:
+    - infrastructure_provider is defined
+    - infrastructure_provider == 'nvidia_bmm'
+    - carbide_removed_agent_hostnames is defined
+    - carbide_removed_agent_hostnames | length > 0
+  ansible.builtin.include_role:
+    name: osac.service.metallb_ingress
+    tasks_from: delete_bgp_peers
+
+# =============================================================================
 # Provider-specific: MetalLB and ingress configuration
 # =============================================================================
 

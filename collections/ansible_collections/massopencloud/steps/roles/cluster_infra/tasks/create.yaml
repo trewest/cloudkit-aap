@@ -184,15 +184,6 @@
   vars:
     carbide_infra_name: "{{ cluster_infra_name }}"
 
-- name: Clean up BGPPeers for removed agents
-  when:
-    - infrastructure_provider == 'nvidia_bmm'
-    - carbide_removed_agent_hostnames is defined
-    - carbide_removed_agent_hostnames | length > 0
-  ansible.builtin.include_role:
-    name: osac.service.metallb_ingress
-    tasks_from: delete_bgp_peers
-
 - name: Select and label new Agent resources
   ansible.builtin.include_role:
     name: manage_agents
