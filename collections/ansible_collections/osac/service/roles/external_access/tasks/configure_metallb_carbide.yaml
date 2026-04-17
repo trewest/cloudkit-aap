@@ -11,6 +11,7 @@
         metallb_ingress_admin_kubeconfig: "{{ admin_kubeconfig }}"
         infrastructure_provider: "nvidia_bmm"
         local_asn: "{{ external_access_local_asn }}"
+        metallb_ingress_expected_worker_count: "{{ external_access_expected_worker_count | default(1) }}"
 
   rescue:
     - name: Read IP registry ConfigMap for cleanup

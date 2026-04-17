@@ -5,7 +5,7 @@
 # Gateway IP: extracted from k8s.ovn.org/l3-gateway-config node annotation
 # Peer ASN: discovered via oc debug node running curl against Carbide metadata service
 
-- name: Get worker nodes from hosted cluster
+- name: Wait for expected worker nodes to appear in hosted cluster
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Node
@@ -13,6 +13,9 @@
     label_selectors:
       - "node-role.kubernetes.io/worker"
   register: worker_nodes_info
+  until: worker_nodes_info.resources | length >= (metallb_ingress_expected_worker_count | default(1) | int)
+  retries: "{{ metallb_ingress_worker_wait_retries | default(60) }}"
+  delay: "{{ metallb_ingress_worker_wait_delay | default(30) }}"
 
 - name: Fail if no worker nodes found
   ansible.builtin.fail:

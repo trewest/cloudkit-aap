@@ -96,6 +96,11 @@
       in namespace '{{ lookup('env', 'POD_NAMESPACE') }}'.
       Set the osac.io/bgp-asn annotation on the Tenant resource.
 
+- name: Compute total expected worker count
+  ansible.builtin.set_fact:
+    expected_worker_count: >-
+      {{ cluster_order.spec.nodeRequests | unique(attribute='resourceClass') | map(attribute='numberOfNodes') | map('int') | sum }}
+
 - name: Step - Configure external access
   ansible.builtin.include_role:
     name: "{{ (install_step_external_access_override | default(install_step_external_access_default)).name }}"
@@ -106,6 +111,7 @@
     external_access_namespace: "{{ cluster_working_namespace }}"
     external_access_ingress_cidr_range: "{{ nvidia_bmm_ingress_cidr }}"
     external_access_local_asn: "{{ tenant_bgp_asn }}"
+    external_access_expected_worker_count: "{{ expected_worker_count }}"
 
 - name: Step - Retrieve kubeconfig
   ansible.builtin.include_role:
