@@ -49,7 +49,7 @@
     state: absent
     id: "{{ instance_id }}"
     wait: true
-    wait_timeout: "{{ carbide_infra_wait_timeout | default(1800) }}"
+    wait_timeout: "{{ carbide_infra_wait_timeout | default(180) }}"
     api_url: "{{ nvidia_bmm_api_url }}"
     api_token: "{{ nvidia_bmm_api_token }}"
     org: "{{ nvidia_bmm_org }}"
