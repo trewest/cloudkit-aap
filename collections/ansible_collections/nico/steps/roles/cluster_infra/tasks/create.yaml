@@ -107,110 +107,115 @@
     namespace: "{{ cluster_working_namespace }}"
   register: current_node_pools
 
-- name: Set resource classes included in the request
-  ansible.builtin.set_fact:
-    requested_resource_classes: >
-      {{ cluster_infra_node_requests | map(attribute='resourceClass') }}
-
-- name: Determine which resource classes are no longer needed
-  ansible.builtin.set_fact:
-    removed_resource_classes: "{{ removed_resource_classes | default([]) + [item.metadata.labels[agent_resource_class_label]] }}"
-  with_items: "{{ current_node_pools.resources }}"
-  when:
-    - item.metadata.labels is defined
-    - agent_resource_class_label in item.metadata.labels
-    - item.metadata.labels[agent_resource_class_label] not in requested_resource_classes
-
-- name: Display additional resource classes to be removed
-  ansible.builtin.debug:
-    msg: "The following resource classes are no longer requested: {{ removed_resource_classes | default([]) }}"
-
-- name: Initialize updated cluster infra node requests that will include removed resource classes
-  ansible.builtin.set_fact:
-    updated_cluster_infra_node_requests: "{{ cluster_infra_node_requests }}"
-
-- name: Add removed resource classes to updated cluster infra node requests
-  ansible.builtin.set_fact:
-    updated_cluster_infra_node_requests: "{{ updated_cluster_infra_node_requests + [{'numberOfNodes': '0', 'resourceClass': item}] }}"
-  with_items: "{{ removed_resource_classes | default([]) }}"
-
-- name: Wait for the Agents to be removed from the cluster
-  ansible.builtin.include_role:
-    name: osac.service.manage_agents
-    tasks_from: wait_for_agents_to_be_removed
-  vars:
-    manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
-    manage_agents_desired_count: "{{ item.numberOfNodes | int }}"
-    manage_agents_resource_class: "{{ item.resourceClass }}"
-  loop: "{{ updated_cluster_infra_node_requests }}"
-
-# Capture instance IDs before detachment removes labels
-- name: Capture NICo instance IDs from removed agents (before detachment)
+# Scale-down only runs when NodePools already exist.  During initial creation
+# (or re-runs of initial creation), there are no NodePools and nothing to
+# scale down.  Without this guard, agents from a previous failed attempt
+# would appear in both the pre-existing snapshot and the matched list,
+# producing an empty protection list and causing them to be deleted.
+- name: Handle scale-down of existing cluster
+  when: current_node_pools.resources | length > 0
   block:
-    - name: List agents currently labeled with the cluster order label
-      kubernetes.core.k8s_info:
-        kind: Agent
-        api_version: agent-install.openshift.io/v1beta1
-        namespace: "{{ default_agent_namespace }}"
-        label_selectors:
-          - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-      register: nico_allocated_agents
-
-    - name: Filter agents removed from the cluster (pre-existing agents only)
+    - name: Set resource classes included in the request
       ansible.builtin.set_fact:
-        nico_removed_agents: >-
-          {{ nico_allocated_agents.resources
-             | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
-             | json_query('[?contains(`' + (pre_nico_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
+        requested_resource_classes: >
+          {{ cluster_infra_node_requests | map(attribute='resourceClass') }}
 
-    - name: Extract instance IDs from removed agents
+    - name: Determine which resource classes are no longer needed
       ansible.builtin.set_fact:
-        nico_removed_instance_ids: >-
-          {{
-            nico_removed_agents |
-            selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') |
-            map(attribute='metadata.labels.nvidia-bmm-instance-id') |
-            list
-          }}
+        removed_resource_classes: "{{ removed_resource_classes | default([]) + [item.metadata.labels[agent_resource_class_label]] }}"
+      with_items: "{{ current_node_pools.resources }}"
+      when:
+        - item.metadata.labels is defined
+        - agent_resource_class_label in item.metadata.labels
+        - item.metadata.labels[agent_resource_class_label] not in requested_resource_classes
 
-    - name: Extract hostnames for BGPPeer cleanup
-      ansible.builtin.set_fact:
-        nico_removed_agent_hostnames: >-
-          {{
-            nico_removed_agents |
-            selectattr('spec.hostname', 'defined') |
-            map(attribute='spec.hostname') |
-            list
-          }}
-
-    - name: Display scale-down cleanup plan
+    - name: Display additional resource classes to be removed
       ansible.builtin.debug:
-        msg: "Scale-down cleanup: {{ nico_removed_instance_ids | length }} instances, {{ nico_removed_agent_hostnames | length }} BGPPeers to clean up"
+        msg: "The following resource classes are no longer requested: {{ removed_resource_classes | default([]) }}"
 
-# =============================================================================
-# Detach removed agents and clean up instances
-# =============================================================================
+    - name: Initialize updated cluster infra node requests that will include removed resource classes
+      ansible.builtin.set_fact:
+        updated_cluster_infra_node_requests: "{{ cluster_infra_node_requests }}"
+
+    - name: Add removed resource classes to updated cluster infra node requests
+      ansible.builtin.set_fact:
+        updated_cluster_infra_node_requests: "{{ updated_cluster_infra_node_requests + [{'numberOfNodes': '0', 'resourceClass': item}] }}"
+      with_items: "{{ removed_resource_classes | default([]) }}"
+
+    - name: Wait for the Agents to be removed from the cluster
+      ansible.builtin.include_role:
+        name: osac.service.manage_agents
+        tasks_from: wait_for_agents_to_be_removed
+      vars:
+        manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
+        manage_agents_desired_count: "{{ item.numberOfNodes | int }}"
+        manage_agents_resource_class: "{{ item.resourceClass }}"
+      loop: "{{ updated_cluster_infra_node_requests }}"
+
+    # Capture instance IDs before detachment removes labels
+    - name: Capture NICo instance IDs from removed agents (before detachment)
+      block:
+        - name: List agents currently labeled with the cluster order label
+          kubernetes.core.k8s_info:
+            kind: Agent
+            api_version: agent-install.openshift.io/v1beta1
+            namespace: "{{ default_agent_namespace }}"
+            label_selectors:
+              - "{{ cluster_order_label }}={{ cluster_infra_name }}"
+          register: nico_allocated_agents
+
+        - name: Filter agents removed from the cluster (pre-existing agents only)
+          ansible.builtin.set_fact:
+            nico_removed_agents: >-
+              {{ nico_allocated_agents.resources
+                 | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
+                 | json_query('[?contains(`' + (pre_nico_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
+
+        - name: Extract instance IDs from removed agents
+          ansible.builtin.set_fact:
+            nico_removed_instance_ids: >-
+              {{
+                nico_removed_agents |
+                selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') |
+                map(attribute='metadata.labels.nvidia-bmm-instance-id') |
+                list
+              }}
+
+        - name: Extract hostnames for BGPPeer cleanup
+          ansible.builtin.set_fact:
+            nico_removed_agent_hostnames: >-
+              {{
+                nico_removed_agents |
+                selectattr('spec.hostname', 'defined') |
+                map(attribute='spec.hostname') |
+                list
+              }}
+
+        - name: Display scale-down cleanup plan
+          ansible.builtin.debug:
+            msg: "Scale-down cleanup: {{ nico_removed_instance_ids | length }} instances, {{ nico_removed_agent_hostnames | length }} BGPPeers to clean up"
+
+    # Detach removed agents and clean up instances
+    - name: Detach agents from cluster
+      ansible.builtin.include_role:
+        name: osac.service.manage_agents
+        tasks_from: detach_and_unlabel_all_removed_agents
+      vars:
+        manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
+        manage_agents_protected_agents: "{{ nico_protected_agent_names | default([]) }}"
+
+    - name: Clean up NICo instances for removed agents
+      when:
+        - nico_removed_instance_ids is defined
+        - nico_removed_instance_ids | length > 0
+      ignore_errors: true
+      ansible.builtin.include_tasks: scale_down_cleanup.yaml
 
 # NICo agents connect via VPC, not ESI L2 network attachment
 - name: Set skip network detach and attach for NICo
   ansible.builtin.set_fact:
     manage_agents_skip_network_detach: true
     manage_agents_skip_network_attach: true
-
-- name: Detach agents from cluster
-  ansible.builtin.include_role:
-    name: osac.service.manage_agents
-    tasks_from: detach_and_unlabel_all_removed_agents
-  vars:
-    manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
-    manage_agents_protected_agents: "{{ nico_protected_agent_names | default([]) }}"
-
-- name: Clean up NICo instances for removed agents
-  when:
-    - nico_removed_instance_ids is defined
-    - nico_removed_instance_ids | length > 0
-  ignore_errors: true
-  ansible.builtin.include_tasks: scale_down_cleanup.yaml
 
 # =============================================================================
 # Select and attach new agents
