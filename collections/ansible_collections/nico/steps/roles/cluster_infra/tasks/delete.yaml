@@ -54,6 +54,11 @@
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
 
+- name: Set NICo infrastructure variables from cluster_infra context
+  ansible.builtin.set_fact:
+    nico_infra_name: "{{ cluster_infra_name }}"
+    nico_infra_namespace: "{{ cluster_working_namespace }}"
+
 - name: Delete NICo cluster infrastructure
   ansible.builtin.include_tasks: delete_nico_infra.yaml
   ignore_errors: true
