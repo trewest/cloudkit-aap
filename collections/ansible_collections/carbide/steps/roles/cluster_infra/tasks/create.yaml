@@ -3,13 +3,55 @@
   ansible.builtin.debug:
     var: cluster_infra_node_requests
 
-# Snapshot agents that exist BEFORE carbide_infra runs.  After carbide_infra
-# creates new instances (scale-up), the new agents will lack
-# clusterdeployment-namespace just like agents that HyperShift detached
-# (scale-down).  By recording which agents existed before, we can tell them
-# apart: agents in the snapshot that later lack clusterdeployment-namespace
-# were detached; agents NOT in the snapshot are newly created and must not
-# be cleaned up.
+# =============================================================================
+# Carbide authentication
+# =============================================================================
+
+- name: Validate required Carbide credentials are configured
+  ansible.builtin.assert:
+    that:
+      - nvidia_bmm_api_url | length > 0
+      - nvidia_bmm_client_id | length > 0
+      - nvidia_bmm_client_secret | length > 0
+      - nvidia_bmm_org | length > 0
+      - nvidia_bmm_tenant_id | length > 0
+      - nvidia_bmm_site_id | length > 0
+      - nvidia_bmm_ssa_token_url | length > 0
+    fail_msg: >
+      Carbide credentials not configured. Ensure cluster-fulfillment-ig Secret
+      contains NVIDIA_BMM_API_URL, NVIDIA_BMM_CLIENT_ID, NVIDIA_BMM_CLIENT_SECRET,
+      NVIDIA_BMM_ORG, NVIDIA_BMM_TENANT_ID, NVIDIA_BMM_SITE_ID, NVIDIA_BMM_SSA_TOKEN_URL
+
+- name: Exchange client credentials for JWT token
+  ansible.builtin.uri:
+    url: "{{ nvidia_bmm_ssa_token_url }}"
+    method: POST
+    url_username: "{{ nvidia_bmm_client_id }}"
+    url_password: "{{ nvidia_bmm_client_secret }}"
+    force_basic_auth: true
+    body_format: form-urlencoded
+    body:
+      grant_type: client_credentials
+      scope: "{{ nvidia_bmm_oauth_scope | default(omit) }}"
+    status_code: 200
+  register: carbide_token_response
+  no_log: true
+
+- name: Set Carbide API token for subsequent requests
+  ansible.builtin.set_fact:
+    nvidia_bmm_api_token: "{{ carbide_token_response.json.access_token }}"
+  no_log: true
+
+# =============================================================================
+# Snapshot agents before provisioning
+# =============================================================================
+
+# Snapshot agents that exist BEFORE new instances are created.  After
+# provisioning, new agents will lack clusterdeployment-namespace just like
+# agents that HyperShift detached (scale-down).  By recording which agents
+# existed before, we can tell them apart: agents in the snapshot that later
+# lack clusterdeployment-namespace were detached; agents NOT in the snapshot
+# are newly created and must not be cleaned up.
 - name: Snapshot pre-existing Carbide agents
   kubernetes.core.k8s_info:
     kind: Agent
@@ -24,19 +66,12 @@
     pre_carbide_agent_names: >-
       {{ (pre_carbide_agents.resources | default([])) | map(attribute='metadata.name') | list }}
 
+# =============================================================================
+# Create Carbide infrastructure (VPC, prefix, peering, instances)
+# =============================================================================
+
 - name: Create Carbide cluster infrastructure
-  ansible.builtin.include_role:
-    name: osac.service.carbide_infra
-  vars:
-    carbide_infra_state: present
-    carbide_infra_name: "{{ cluster_infra_name }}"
-    carbide_infra_namespace: "{{ cluster_working_namespace }}"
-    carbide_infra_node_requests: "{{ cluster_infra_node_requests }}"
-    # Optional template parameters for using existing VPC/prefix
-    carbide_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
-    carbide_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"
-    carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
-    carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
+  ansible.builtin.include_tasks: create_carbide_infra.yaml
 
 # Protect agents created in THIS run — those matched by carbide_infra but
 # not in the pre-existing snapshot.
@@ -45,6 +80,10 @@
     carbide_protected_agent_names: >-
       {{ (carbide_matched_agents | default([]) | map(attribute='agent_name') | list)
          | difference(pre_carbide_agent_names | default([])) }}
+
+# =============================================================================
+# Scale-down handling
+# =============================================================================
 
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
@@ -95,7 +134,7 @@
     manage_agents_resource_class: "{{ item.resourceClass }}"
   loop: "{{ updated_cluster_infra_node_requests }}"
 
-# Carbide scale-down: capture instance IDs before detachment removes labels
+# Capture instance IDs before detachment removes labels
 - name: Capture Carbide instance IDs from removed agents (before detachment)
   block:
     - name: List agents currently labeled with the cluster order label
@@ -138,6 +177,10 @@
       ansible.builtin.debug:
         msg: "Scale-down cleanup: {{ carbide_removed_instance_ids | length }} instances, {{ carbide_removed_agent_hostnames | length }} BGPPeers to clean up"
 
+# =============================================================================
+# Detach removed agents and clean up instances
+# =============================================================================
+
 # Carbide agents connect via VPC, not ESI L2 network attachment
 - name: Set skip network detach and attach for Carbide
   ansible.builtin.set_fact:
@@ -152,17 +195,16 @@
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
     manage_agents_protected_agents: "{{ carbide_protected_agent_names | default([]) }}"
 
-# Carbide scale-down: destroy removed instances
 - name: Clean up Carbide instances for removed agents
   when:
     - carbide_removed_instance_ids is defined
     - carbide_removed_instance_ids | length > 0
   ignore_errors: true
-  ansible.builtin.include_role:
-    name: osac.service.carbide_infra
-    tasks_from: scale_down_cleanup
-  vars:
-    carbide_infra_name: "{{ cluster_infra_name }}"
+  ansible.builtin.include_tasks: scale_down_cleanup.yaml
+
+# =============================================================================
+# Select and attach new agents
+# =============================================================================
 
 - name: Select and label new Agent resources
   ansible.builtin.include_role:
