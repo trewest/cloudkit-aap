@@ -4,8 +4,8 @@
 ocp_release_image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
 
 # Instance type resolution: resource class names in nodeRequests must match
-# Carbide instance type names directly. The carbide_infra role looks up the
-# instance type by name via the Carbide API — no manual mapping needed.
+# NICo instance type names directly. The nico_infra role looks up the
+# instance type by name via the NICo API — no manual mapping needed.
 #
 # Example: if nodeRequests specifies resourceClass "dgx", there must be a
-# Carbide instance type named "dgx" at the configured site.
+# NICo instance type named "dgx" at the configured site.

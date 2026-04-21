@@ -1,10 +1,10 @@
 ---
 argument_specs:
   main:
-    short_description: OpenShift 4.20 cluster on Carbide infrastructure
+    short_description: OpenShift 4.20 cluster on NICo infrastructure
     description:
-      - Creates an OpenShift 4.20 cluster using NVIDIA Carbide for bare metal provisioning
-      - Requires Carbide credentials configured via cluster-fulfillment-ig Secret
+      - Creates an OpenShift 4.20 cluster using NVIDIA NICo for bare metal provisioning
+      - Requires NICo credentials configured via cluster-fulfillment-ig Secret
     options:
       cluster_order:
         type: dict
@@ -34,7 +34,7 @@ argument_specs:
             type: str
             required: true
           ip_block_id:
-            description: Carbide IP block ID for VPC prefix allocation
+            description: NICo IP block ID for VPC prefix allocation
             type: str
             required: true
           ocp_release_image:
@@ -42,14 +42,14 @@ argument_specs:
             type: str
             required: false
           vpc_id:
-            description: Existing Carbide VPC ID (if not creating new VPC)
+            description: Existing NICo VPC ID (if not creating new VPC)
             type: str
             required: false
           vpc_prefix_id:
-            description: Existing Carbide VPC prefix ID (if not creating new prefix)
+            description: Existing NICo VPC prefix ID (if not creating new prefix)
             type: str
             required: false
           ssh_key_group_id:
-            description: Carbide SSH key group ID (overrides default)
+            description: NICo SSH key group ID (overrides default)
             type: str
             required: false

@@ -1,7 +1,7 @@
 - name: Set install step defaults
   ansible.builtin.set_fact:
     install_step_pre_install_hook_default:
-      name: osac.templates.ocp_4_20_small_carbide
+      name: osac.templates.ocp_4_20_small_nico
       tasks_from: noop.yml
     install_step_hosted_cluster_default:
       name: osac.service.hosted_cluster
@@ -16,13 +16,13 @@
       name: osac.service.retrieve_kubeconfig
       tasks_from: main.yaml
     install_step_post_install_hook_default:
-      name: osac.templates.ocp_4_20_small_carbide
+      name: osac.templates.ocp_4_20_small_nico
       tasks_from: noop.yml
 
-- name: Set backend collection and resource class label for Carbide
+- name: Set backend collection and resource class label for NICo
   ansible.builtin.set_fact:
-    agent_resource_class_label: "{{ carbide_agent_resource_class_label }}"
-    network_steps_collection: carbide.steps
+    agent_resource_class_label: "{{ nico_agent_resource_class_label }}"
+    network_steps_collection: nico.steps
 
 - name: Set OCP release image from template parameters if provided
   ansible.builtin.set_fact:

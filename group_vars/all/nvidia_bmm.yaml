@@ -1,14 +1,14 @@
 ---
-# NVIDIA Bare Metal Manager (Carbide) Configuration
+# NVIDIA Bare Metal Manager (NICo) Configuration
 # =================================================
-# These settings configure the NVIDIA Carbide infrastructure provider for OSAC.
+# These settings configure the NVIDIA NICo infrastructure provider for OSAC.
 #
 # SECURITY: NEVER commit actual secrets to this file!
 # All sensitive values MUST be provided via environment variables injected by
 # AAP from the cluster-fulfillment-ig Kubernetes Secret.
 #
 # The environment variables are:
-#   - NVIDIA_BMM_API_URL          - Carbide API endpoint
+#   - NVIDIA_BMM_API_URL          - NICo API endpoint
 #   - NVIDIA_BMM_CLIENT_ID         - OAuth2 client ID
 #   - NVIDIA_BMM_CLIENT_SECRET     - OAuth2 client secret
 #   - NVIDIA_BMM_ORG               - Organization identifier
@@ -26,15 +26,15 @@
 
 # API Connection Settings
 # -----------------------
-# Base URL for the Carbide API (e.g., https://carbide.example.com)
+# Base URL for the NICo API (e.g., https://nico.example.com)
 nvidia_bmm_api_url: "{{ lookup('env', 'NVIDIA_BMM_API_URL') | default('', true) }}"
 
-# API path prefix (typically 'forge' for Carbide)
+# API path prefix (typically 'forge' for NICo)
 nvidia_bmm_api_path_prefix: "{{ lookup('env', 'NVIDIA_BMM_API_PATH_PREFIX') | default('forge', true) }}"
 
 # OAuth2 Client Credentials Flow Configuration
 # --------------------------------------------
-# Carbide uses OAuth2 client credentials flow for authentication.
+# NICo uses OAuth2 client credentials flow for authentication.
 # These credentials are exchanged for a JWT token via the SSA token endpoint.
 nvidia_bmm_client_id: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_ID') | default('', true) }}"
 nvidia_bmm_client_secret: "{{ lookup('env', 'NVIDIA_BMM_CLIENT_SECRET') | default('', true) }}"
@@ -45,7 +45,7 @@ nvidia_bmm_oauth_scope: "{{ lookup('env', 'NVIDIA_BMM_OAUTH_SCOPE') | default(''
 
 # Multi-tenancy Configuration
 # ---------------------------
-# Carbide's multi-tenant model requires org, site, and tenant identifiers.
+# NICo's multi-tenant model requires org, site, and tenant identifiers.
 # These values scope API operations to the correct tenant and datacenter.
 nvidia_bmm_org: "{{ lookup('env', 'NVIDIA_BMM_ORG') | default('', true) }}"
 nvidia_bmm_site_id: "{{ lookup('env', 'NVIDIA_BMM_SITE_ID') | default('', true) }}"
@@ -53,7 +53,7 @@ nvidia_bmm_tenant_id: "{{ lookup('env', 'NVIDIA_BMM_TENANT_ID') | default('', tr
 
 # Network Configuration
 # ---------------------
-# Network virtualization type - "FNN" (Fully Networked Nodes) for Carbide VPC support
+# Network virtualization type - "FNN" (Fully Networked Nodes) for NICo VPC support
 nvidia_bmm_network_virtualization_type: "FNN"
 
 # Default VPC prefix length (CIDR bits)
@@ -82,7 +82,7 @@ nvidia_bmm_default_ssh_key_group_id: "{{ lookup('env', 'NVIDIA_BMM_SSH_KEY_GROUP
 
 # DNS server to inject into iPXE boot script (optional)
 # When set, prepends 'set dns <server>' after the #!ipxe shebang
-carbide_infra_ipxe_dns_server: "{{ lookup('env', 'NVIDIA_BMM_IPXE_DNS_SERVER') | default('', true) }}"
+nico_infra_ipxe_dns_server: "{{ lookup('env', 'NVIDIA_BMM_IPXE_DNS_SERVER') | default('', true) }}"
 
 # Resource Labels
 # ---------------
@@ -94,12 +94,12 @@ nvidia_bmm_common_labels:
 # Cluster order label for associating agents with clusters
 cluster_order_label: "osac.io/cluster"
 
-# Agent resource class label for Carbide-provisioned agents
+# Agent resource class label for NICo-provisioned agents
 # Provider-agnostic label used by manage_agents for agent selection
-carbide_agent_resource_class_label: "osac.io/resource-class"
+nico_agent_resource_class_label: "osac.io/resource-class"
 
 # Instance Type Resolution
 # ------------------------
-# Instance types are resolved by name via the Carbide API.
-# The resource class name in nodeRequests must match a Carbide instance
+# Instance types are resolved by name via the NICo API.
+# The resource class name in nodeRequests must match a NICo instance
 # type name at the configured site. No manual mapping is needed.

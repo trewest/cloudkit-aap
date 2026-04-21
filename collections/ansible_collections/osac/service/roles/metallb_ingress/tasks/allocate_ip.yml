@@ -13,7 +13,7 @@
     api_version: v1
     kind: ConfigMap
     namespace: "{{ metallb_ip_registry_namespace }}"
-    name: carbide-ip-registry
+    name: nico-ip-registry
     kubeconfig: "{{ hub_kubeconfig | default(omit) }}"
   register: ip_registry_info
   retries: "{{ metallb_ip_allocation_retries }}"
@@ -63,7 +63,7 @@
       apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: carbide-ip-registry
+        name: nico-ip-registry
         namespace: "{{ metallb_ip_registry_namespace }}"
       data: "{{ allocated_ips | combine({metallb_ingress_ip: cluster_name}) }}"
   register: registry_update_result
@@ -77,7 +77,7 @@
     api_version: v1
     kind: ConfigMap
     namespace: "{{ metallb_ip_registry_namespace }}"
-    name: carbide-ip-registry
+    name: nico-ip-registry
     kubeconfig: "{{ hub_kubeconfig | default(omit) }}"
   register: validation_result
   retries: "{{ metallb_ip_allocation_retries }}"

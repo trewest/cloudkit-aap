@@ -4,10 +4,10 @@
     var: cluster_infra_node_requests
 
 # =============================================================================
-# Carbide authentication
+# NICo authentication
 # =============================================================================
 
-- name: Validate required Carbide credentials are configured
+- name: Validate required NICo credentials are configured
   ansible.builtin.assert:
     that:
       - nvidia_bmm_api_url | length > 0
@@ -18,7 +18,7 @@
       - nvidia_bmm_site_id | length > 0
       - nvidia_bmm_ssa_token_url | length > 0
     fail_msg: >
-      Carbide credentials not configured. Ensure cluster-fulfillment-ig Secret
+      NICo credentials not configured. Ensure cluster-fulfillment-ig Secret
       contains NVIDIA_BMM_API_URL, NVIDIA_BMM_CLIENT_ID, NVIDIA_BMM_CLIENT_SECRET,
       NVIDIA_BMM_ORG, NVIDIA_BMM_TENANT_ID, NVIDIA_BMM_SITE_ID, NVIDIA_BMM_SSA_TOKEN_URL
 
@@ -34,12 +34,12 @@
       grant_type: client_credentials
       scope: "{{ nvidia_bmm_oauth_scope | default(omit) }}"
     status_code: 200
-  register: carbide_token_response
+  register: nico_token_response
   no_log: true
 
-- name: Set Carbide API token for subsequent requests
+- name: Set NICo API token for subsequent requests
   ansible.builtin.set_fact:
-    nvidia_bmm_api_token: "{{ carbide_token_response.json.access_token }}"
+    nvidia_bmm_api_token: "{{ nico_token_response.json.access_token }}"
   no_log: true
 
 # =============================================================================
@@ -52,34 +52,34 @@
 # existed before, we can tell them apart: agents in the snapshot that later
 # lack clusterdeployment-namespace were detached; agents NOT in the snapshot
 # are newly created and must not be cleaned up.
-- name: Snapshot pre-existing Carbide agents
+- name: Snapshot pre-existing NICo agents
   kubernetes.core.k8s_info:
     kind: Agent
     api_version: agent-install.openshift.io/v1beta1
     namespace: "{{ default_agent_namespace }}"
     label_selectors:
       - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-  register: pre_carbide_agents
+  register: pre_nico_agents
 
 - name: Store pre-existing agent names
   ansible.builtin.set_fact:
-    pre_carbide_agent_names: >-
-      {{ (pre_carbide_agents.resources | default([])) | map(attribute='metadata.name') | list }}
+    pre_nico_agent_names: >-
+      {{ (pre_nico_agents.resources | default([])) | map(attribute='metadata.name') | list }}
 
 # =============================================================================
-# Create Carbide infrastructure (VPC, prefix, peering, instances)
+# Create NICo infrastructure (VPC, prefix, peering, instances)
 # =============================================================================
 
-- name: Create Carbide cluster infrastructure
-  ansible.builtin.include_tasks: create_carbide_infra.yaml
+- name: Create NICo cluster infrastructure
+  ansible.builtin.include_tasks: create_nico_infra.yaml
 
-# Protect agents created in THIS run — those matched by carbide_infra but
+# Protect agents created in THIS run — those matched by nico_infra but
 # not in the pre-existing snapshot.
 - name: Compute protected agent names (new agents only)
   ansible.builtin.set_fact:
-    carbide_protected_agent_names: >-
-      {{ (carbide_matched_agents | default([]) | map(attribute='agent_name') | list)
-         | difference(pre_carbide_agent_names | default([])) }}
+    nico_protected_agent_names: >-
+      {{ (nico_matched_agents | default([]) | map(attribute='agent_name') | list)
+         | difference(pre_nico_agent_names | default([])) }}
 
 # =============================================================================
 # Scale-down handling
@@ -135,7 +135,7 @@
   loop: "{{ updated_cluster_infra_node_requests }}"
 
 # Capture instance IDs before detachment removes labels
-- name: Capture Carbide instance IDs from removed agents (before detachment)
+- name: Capture NICo instance IDs from removed agents (before detachment)
   block:
     - name: List agents currently labeled with the cluster order label
       kubernetes.core.k8s_info:
@@ -144,20 +144,20 @@
         namespace: "{{ default_agent_namespace }}"
         label_selectors:
           - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-      register: carbide_allocated_agents
+      register: nico_allocated_agents
 
     - name: Filter agents removed from the cluster (pre-existing agents only)
       ansible.builtin.set_fact:
-        carbide_removed_agents: >-
-          {{ carbide_allocated_agents.resources
+        nico_removed_agents: >-
+          {{ nico_allocated_agents.resources
              | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
-             | json_query('[?contains(`' + (pre_carbide_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
+             | json_query('[?contains(`' + (pre_nico_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
 
     - name: Extract instance IDs from removed agents
       ansible.builtin.set_fact:
-        carbide_removed_instance_ids: >-
+        nico_removed_instance_ids: >-
           {{
-            carbide_removed_agents |
+            nico_removed_agents |
             selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') |
             map(attribute='metadata.labels.nvidia-bmm-instance-id') |
             list
@@ -165,9 +165,9 @@
 
     - name: Extract hostnames for BGPPeer cleanup
       ansible.builtin.set_fact:
-        carbide_removed_agent_hostnames: >-
+        nico_removed_agent_hostnames: >-
           {{
-            carbide_removed_agents |
+            nico_removed_agents |
             selectattr('spec.hostname', 'defined') |
             map(attribute='spec.hostname') |
             list
@@ -175,14 +175,14 @@
 
     - name: Display scale-down cleanup plan
       ansible.builtin.debug:
-        msg: "Scale-down cleanup: {{ carbide_removed_instance_ids | length }} instances, {{ carbide_removed_agent_hostnames | length }} BGPPeers to clean up"
+        msg: "Scale-down cleanup: {{ nico_removed_instance_ids | length }} instances, {{ nico_removed_agent_hostnames | length }} BGPPeers to clean up"
 
 # =============================================================================
 # Detach removed agents and clean up instances
 # =============================================================================
 
-# Carbide agents connect via VPC, not ESI L2 network attachment
-- name: Set skip network detach and attach for Carbide
+# NICo agents connect via VPC, not ESI L2 network attachment
+- name: Set skip network detach and attach for NICo
   ansible.builtin.set_fact:
     manage_agents_skip_network_detach: true
     manage_agents_skip_network_attach: true
@@ -193,12 +193,12 @@
     tasks_from: detach_and_unlabel_all_removed_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
-    manage_agents_protected_agents: "{{ carbide_protected_agent_names | default([]) }}"
+    manage_agents_protected_agents: "{{ nico_protected_agent_names | default([]) }}"
 
-- name: Clean up Carbide instances for removed agents
+- name: Clean up NICo instances for removed agents
   when:
-    - carbide_removed_instance_ids is defined
-    - carbide_removed_instance_ids | length > 0
+    - nico_removed_instance_ids is defined
+    - nico_removed_instance_ids | length > 0
   ignore_errors: true
   ansible.builtin.include_tasks: scale_down_cleanup.yaml
 

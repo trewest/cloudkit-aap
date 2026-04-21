@@ -1,0 +1,94 @@
+---
+# Scale-down cleanup: destroy removed NICo instances and update ConfigMap
+# This file handles a SUBSET of instances (removed agents only, not all instances)
+# Called by cluster_infra workflow during scale-down operations
+
+- name: Scale-down instance cleanup
+  when: nico_removed_instance_ids is defined and nico_removed_instance_ids | length > 0
+  block:
+
+    # Re-exchange credentials for a fresh token.  The token obtained at the
+    # start of the run may have expired while waiting for agents to be removed.
+    - name: Exchange client credentials for fresh JWT token
+      ansible.builtin.uri:
+        url: "{{ nvidia_bmm_ssa_token_url }}"
+        method: POST
+        url_username: "{{ nvidia_bmm_client_id }}"
+        url_password: "{{ nvidia_bmm_client_secret }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          scope: "{{ nvidia_bmm_oauth_scope | default(omit) }}"
+        status_code: 200
+      register: nico_cleanup_token_response
+      no_log: true
+
+    - name: Set fresh NICo API token
+      ansible.builtin.set_fact:
+        nvidia_bmm_api_token: "{{ nico_cleanup_token_response.json.access_token }}"
+      no_log: true
+
+    - name: Delete removed NICo instances
+      nvidia.bare_metal.instance:
+        state: absent
+        id: "{{ instance_id }}"
+        wait: true
+        wait_timeout: "{{ nico_infra_wait_timeout | default(180) }}"
+        api_url: "{{ nvidia_bmm_api_url }}"
+        api_token: "{{ nvidia_bmm_api_token }}"
+        org: "{{ nvidia_bmm_org }}"
+        api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
+      loop: "{{ nico_removed_instance_ids }}"
+      loop_control:
+        loop_var: instance_id
+        label: "Deleting instance {{ instance_id }}"
+      ignore_errors: true  # Instance may have been manually deleted
+
+    - name: Read current nico-infra ConfigMap
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ConfigMap
+        name: "nico-infra-{{ cluster_infra_name }}"
+        namespace: "{{ nico_infra_configmap_namespace | default('hardware-inventory') }}"
+      register: nico_configmap_current
+
+    - name: Compute updated instance_ids
+      when: nico_configmap_current.resources | length > 0
+      ansible.builtin.set_fact:
+        nico_updated_instance_ids: >-
+          {{
+            (nico_configmap_current.resources[0].data.instance_ids | default('[]') | from_json) |
+            difference(nico_removed_instance_ids) |
+            to_json
+          }}
+
+    - name: Write updated ConfigMap
+      when: nico_configmap_current.resources | length > 0
+      kubernetes.core.k8s:
+        state: present
+        force: true
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: "nico-infra-{{ cluster_infra_name }}"
+            namespace: "{{ nico_infra_configmap_namespace | default('hardware-inventory') }}"
+            labels:
+              managed-by: osac
+              provider: nico
+              cluster: "{{ cluster_infra_name }}"
+          data:
+            vpc_id: "{{ nico_configmap_current.resources[0].data.vpc_id }}"
+            vpc_name: "{{ nico_configmap_current.resources[0].data.vpc_name }}"
+            vpc_prefix_id: "{{ nico_configmap_current.resources[0].data.vpc_prefix_id }}"
+            vpc_created: "{{ nico_configmap_current.resources[0].data.vpc_created | string }}"
+            prefix_created: "{{ nico_configmap_current.resources[0].data.prefix_created | string }}"
+            instance_ids: "{{ nico_updated_instance_ids }}"
+            vpc_peering_id: "{{ nico_configmap_current.resources[0].data.vpc_peering_id | default('') }}"
+            site_id: "{{ nico_configmap_current.resources[0].data.site_id }}"
+            tenant_id: "{{ nico_configmap_current.resources[0].data.tenant_id }}"
+
+    - name: Display cleanup summary
+      ansible.builtin.debug:
+        msg: "Scale-down cleanup: destroyed {{ nico_removed_instance_ids | length }} instances, updated ConfigMap"

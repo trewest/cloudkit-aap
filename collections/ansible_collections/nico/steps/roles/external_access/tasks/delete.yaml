@@ -1,13 +1,13 @@
 ---
 # =============================================================================
-# Carbide: remove allocated IP from registry
+# NICo: remove allocated IP from registry
 # =============================================================================
 
 - name: Read IP registry ConfigMap
   kubernetes.core.k8s_info:
     api_version: v1
     kind: ConfigMap
-    name: carbide-ip-registry
+    name: nico-ip-registry
     namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
   register: ip_registry_info
   ignore_errors: true
@@ -23,7 +23,7 @@
       apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: carbide-ip-registry
+        name: nico-ip-registry
         namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
       data: "{{ ip_registry_info.resources[0].data | dict2items | rejectattr('value', 'equalto', external_access_name) | items2dict }}"
   ignore_errors: true

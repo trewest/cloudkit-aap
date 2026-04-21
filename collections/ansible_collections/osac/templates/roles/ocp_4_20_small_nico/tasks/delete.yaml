@@ -1,7 +1,7 @@
 - name: Set delete step defaults
   ansible.builtin.set_fact:
     delete_step_pre_delete_hook_default:
-      name: osac.templates.ocp_4_20_small_carbide
+      name: osac.templates.ocp_4_20_small_nico
       tasks_from: noop.yml
     delete_step_hosted_cluster_default:
       name: osac.service.hosted_cluster
@@ -13,13 +13,13 @@
       name: osac.service.cluster_infra
       tasks_from: main.yaml
     delete_step_post_delete_hook_default:
-      name: osac.templates.ocp_4_20_small_carbide
+      name: osac.templates.ocp_4_20_small_nico
       tasks_from: noop.yml
 
-- name: Set backend collection and resource class label for Carbide
+- name: Set backend collection and resource class label for NICo
   ansible.builtin.set_fact:
-    agent_resource_class_label: "{{ carbide_agent_resource_class_label }}"
-    network_steps_collection: carbide.steps
+    agent_resource_class_label: "{{ nico_agent_resource_class_label }}"
+    network_steps_collection: nico.steps
 
 - name: Step - Pre-delete hook
   ansible.builtin.include_role:

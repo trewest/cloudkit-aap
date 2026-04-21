@@ -3,7 +3,7 @@
 # This task file is included from create_instances.yaml
 
 # Resolve instance type by listing all types for the site and matching by name.
-# Per the enhancement proposal, the hostclass name in nodeRequests matches the Carbide
+# Per the enhancement proposal, the hostclass name in nodeRequests matches the NICo
 # instance type name — no user-maintained mapping dict needed.
 - name: "{{ node_request.resourceClass }} - List instance types for site"
   nvidia.bare_metal.instance_type_info:
@@ -23,9 +23,9 @@
     that:
       - instance_type_match | length > 0
     fail_msg: >
-      Carbide instance type '{{ node_request.resourceClass }}' not found at site '{{ nvidia_bmm_site_id }}'.
+      NICo instance type '{{ node_request.resourceClass }}' not found at site '{{ nvidia_bmm_site_id }}'.
       Available instance types: {{ instance_type_list.resources | map(attribute='name') | list }}.
-      The resource class name in nodeRequests must match a Carbide instance type name.
+      The resource class name in nodeRequests must match a NICo instance type name.
 
 - name: "{{ node_request.resourceClass }} - Set resolved instance type ID"
   ansible.builtin.set_fact:
@@ -38,39 +38,39 @@
 # Determine SSH key group: use override if provided, otherwise use default
 - name: "{{ node_request.resourceClass }} - Resolve SSH key group ID"
   ansible.builtin.set_fact:
-    carbide_effective_ssh_key_group_id: "{{ carbide_infra_ssh_key_group_id if (carbide_infra_ssh_key_group_id is defined and carbide_infra_ssh_key_group_id | length > 0) else nvidia_bmm_default_ssh_key_group_id }}"
+    nico_effective_ssh_key_group_id: "{{ nico_infra_ssh_key_group_id if (nico_infra_ssh_key_group_id is defined and nico_infra_ssh_key_group_id | length > 0) else nvidia_bmm_default_ssh_key_group_id }}"
 
 - name: "{{ node_request.resourceClass }} - Display SSH key group"
   ansible.builtin.debug:
-    msg: "Using SSH key group ID: {{ carbide_effective_ssh_key_group_id }}"
+    msg: "Using SSH key group ID: {{ nico_effective_ssh_key_group_id }}"
 
 - name: "{{ node_request.resourceClass }} - Check if using batch or individual provisioning"
   ansible.builtin.set_fact:
-    use_batch_provisioning: "{{ (node_request.numberOfNodes | int) > 1 and carbide_infra_topology_optimized }}"
+    use_batch_provisioning: "{{ (node_request.numberOfNodes | int) > 1 and nico_infra_topology_optimized }}"
 
 - name: "{{ node_request.resourceClass }} - Batch provision instances"
   when: use_batch_provisioning
   block:
     - name: "{{ node_request.resourceClass }} - Create instances using batch API"
       nvidia.bare_metal.instance_batch:
-        name_prefix: "{{ carbide_infra_instance_name_prefix }}-{{ carbide_infra_name }}-{{ node_request.resourceClass }}"
+        name_prefix: "{{ nico_infra_instance_name_prefix }}-{{ nico_infra_name }}-{{ node_request.resourceClass }}"
         count: "{{ node_request.numberOfNodes | int }}"
         tenant_id: "{{ nvidia_bmm_tenant_id }}"
         instance_type_id: "{{ current_instance_type_id }}"
-        vpc_id: "{{ carbide_vpc_id }}"
+        vpc_id: "{{ nico_vpc_id }}"
         operating_system_id: "{{ nvidia_bmm_default_operating_system_id }}"
-        ipxe_script: "{{ carbide_ipxe_script }}"
+        ipxe_script: "{{ nico_ipxe_script }}"
         interfaces:
-          - vpc_prefix_id: "{{ carbide_vpc_prefix_id }}"
+          - vpc_prefix_id: "{{ nico_vpc_prefix_id }}"
             is_physical: true
         ssh_key_group_ids:
-          - "{{ carbide_effective_ssh_key_group_id }}"
+          - "{{ nico_effective_ssh_key_group_id }}"
         labels:
           managed-by: osac
-          provider: carbide
-          cluster: "{{ carbide_infra_name }}"
+          provider: nico
+          cluster: "{{ nico_infra_name }}"
           resource_class: "{{ node_request.resourceClass }}"
-        topology_optimized: "{{ carbide_infra_topology_optimized }}"
+        topology_optimized: "{{ nico_infra_topology_optimized }}"
         api_url: "{{ nvidia_bmm_api_url }}"
         api_token: "{{ nvidia_bmm_api_token }}"
         org: "{{ nvidia_bmm_org }}"
@@ -79,7 +79,7 @@
 
     - name: "{{ node_request.resourceClass }} - Collect batch instance IDs"
       ansible.builtin.set_fact:
-        carbide_all_instance_ids: "{{ carbide_all_instance_ids | default([]) + (batch_instance_result.resources | map(attribute='id') | list) }}"
+        nico_all_instance_ids: "{{ nico_all_instance_ids | default([]) + (batch_instance_result.resources | map(attribute='id') | list) }}"
 
 - name: "{{ node_request.resourceClass }} - Individual instance provisioning"
   when: not use_batch_provisioning
@@ -87,24 +87,24 @@
     - name: "{{ node_request.resourceClass }} - Create individual instances"
       nvidia.bare_metal.instance:
         state: present
-        name: "{{ carbide_infra_instance_name_prefix }}-{{ carbide_infra_name }}-{{ node_request.resourceClass }}-{{ instance_index }}"
+        name: "{{ nico_infra_instance_name_prefix }}-{{ nico_infra_name }}-{{ node_request.resourceClass }}-{{ instance_index }}"
         tenant_id: "{{ nvidia_bmm_tenant_id }}"
         instance_type_id: "{{ current_instance_type_id }}"
-        vpc_id: "{{ carbide_vpc_id }}"
+        vpc_id: "{{ nico_vpc_id }}"
         operating_system_id: "{{ nvidia_bmm_default_operating_system_id }}"
-        ipxe_script: "{{ carbide_ipxe_script }}"
+        ipxe_script: "{{ nico_ipxe_script }}"
         interfaces:
-          - vpc_prefix_id: "{{ carbide_vpc_prefix_id }}"
+          - vpc_prefix_id: "{{ nico_vpc_prefix_id }}"
             is_physical: true
         ssh_key_group_ids:
-          - "{{ carbide_effective_ssh_key_group_id }}"
+          - "{{ nico_effective_ssh_key_group_id }}"
         labels:
           managed-by: osac
-          provider: carbide
-          cluster: "{{ carbide_infra_name }}"
+          provider: nico
+          cluster: "{{ nico_infra_name }}"
           resource_class: "{{ node_request.resourceClass }}"
-        wait: "{{ carbide_infra_wait }}"
-        wait_timeout: "{{ carbide_infra_wait_timeout }}"
+        wait: "{{ nico_infra_wait }}"
+        wait_timeout: "{{ nico_infra_wait_timeout }}"
         api_url: "{{ nvidia_bmm_api_url }}"
         api_token: "{{ nvidia_bmm_api_token }}"
         org: "{{ nvidia_bmm_org }}"
@@ -117,7 +117,7 @@
 
     - name: "{{ node_request.resourceClass }} - Collect individual instance IDs"
       ansible.builtin.set_fact:
-        carbide_all_instance_ids: "{{ carbide_all_instance_ids | default([]) + (individual_instance_results.results | map(attribute='resource') | map(attribute='id') | list) }}"
+        nico_all_instance_ids: "{{ nico_all_instance_ids | default([]) + (individual_instance_results.results | map(attribute='resource') | map(attribute='id') | list) }}"
 
 - name: "{{ node_request.resourceClass }} - Display provisioned instance count"
   ansible.builtin.debug:

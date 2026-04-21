@@ -1,5 +1,5 @@
 ---
-# This file orchestrates BGP resource creation for Carbide-backed hosted clusters.
+# This file orchestrates BGP resource creation for NICo-backed hosted clusters.
 # It discovers BGP parameters from worker nodes and creates MetalLB BGP resources.
 
 - name: Discover BGP parameters from worker nodes

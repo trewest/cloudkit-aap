@@ -1,9 +1,9 @@
 ---
 # This file discovers BGP parameters (gateway IP and peer ASN) from worker nodes
-# for configuring MetalLB BGPPeer resources in Carbide-backed hosted clusters.
+# for configuring MetalLB BGPPeer resources in NICo-backed hosted clusters.
 #
 # Gateway IP: extracted from k8s.ovn.org/l3-gateway-config node annotation
-# Peer ASN: discovered via oc debug node running curl against Carbide metadata service
+# Peer ASN: discovered via oc debug node running curl against NICo metadata service
 
 - name: Wait for expected worker nodes to appear in hosted cluster
   kubernetes.core.k8s_info:
@@ -59,7 +59,7 @@
     msg: "Worker gateways: {{ worker_gateway_map | default({}) }}"
 
 # =============================================================================
-# Peer ASN discovery: oc debug node to curl Carbide metadata service
+# Peer ASN discovery: oc debug node to curl NICo metadata service
 # =============================================================================
 
 - name: Write kubeconfig to temporary file for oc debug
@@ -69,7 +69,7 @@
     mode: '0600'
   register: bgp_kubeconfig_file
 
-- name: Discover peer ASN from Carbide metadata service
+- name: Discover peer ASN from NICo metadata service
   ansible.builtin.command:
     cmd: >-
       oc debug node/{{ item.metadata.name }}

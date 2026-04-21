@@ -107,7 +107,7 @@
   delay: 10
   when: infrastructure_provider is not defined or infrastructure_provider != 'nvidia_bmm'
 
-- name: Configure BGP for Carbide infrastructure
+- name: Configure BGP for NICo infrastructure
   ansible.builtin.include_tasks: configure_bgp.yml
   when:
     - infrastructure_provider is defined

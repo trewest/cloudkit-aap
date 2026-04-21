@@ -1,63 +1,63 @@
 ---
-# Defaults for carbide_infra role
+# Defaults for nico_infra role
 
 # State: present or absent
-carbide_infra_state: present
+nico_infra_state: present
 
 # Cluster name (used for VPC naming per D-09)
-carbide_infra_name: ""
+nico_infra_name: ""
 
 # Kubernetes namespace for ConfigMap state storage
-carbide_infra_namespace: ""
+nico_infra_namespace: ""
 
 # Namespace for the infrastructure state ConfigMap
 # Must be a persistent namespace that survives cluster deletion
-carbide_infra_configmap_namespace: "hardware-inventory"
+nico_infra_configmap_namespace: "hardware-inventory"
 
 # VPC naming prefix (per D-09: osac-vpc-{cluster_name})
-carbide_infra_vpc_name_prefix: "osac-vpc"
+nico_infra_vpc_name_prefix: "osac-vpc"
 
 # VPC prefix length (subnet size)
-carbide_infra_prefix_length: "{{ nvidia_bmm_default_prefix_length | default(28) }}"
+nico_infra_prefix_length: "{{ nvidia_bmm_default_prefix_length | default(28) }}"
 
 # Optional: Use existing VPC instead of creating new
-carbide_infra_vpc_id: ""
+nico_infra_vpc_id: ""
 
 # Optional: Use existing VPC prefix instead of creating new
-carbide_infra_vpc_prefix_id: ""
+nico_infra_vpc_prefix_id: ""
 
 # IP block ID for prefix allocation (required when creating new prefix)
-carbide_infra_ip_block_id: ""
+nico_infra_ip_block_id: ""
 
 # Instance provisioning (Phase 2)
 # Node requests: list of {resourceClass: str, numberOfNodes: int}
-carbide_infra_node_requests: []
+nico_infra_node_requests: []
 
 # InfraEnv resource for iPXE boot script
-carbide_infra_infraenv_namespace: "hardware-inventory"
-carbide_infra_infraenv_name: "hardware-inventory"
-carbide_infra_infraenv_retries: 60
-carbide_infra_infraenv_delay: 10
+nico_infra_infraenv_namespace: "hardware-inventory"
+nico_infra_infraenv_name: "hardware-inventory"
+nico_infra_infraenv_retries: 60
+nico_infra_infraenv_delay: 10
 
 # Optional: DNS server to inject into iPXE script
-# carbide_infra_ipxe_dns_server: ""
+# nico_infra_ipxe_dns_server: ""
 
 # Instance naming prefix
-carbide_infra_instance_name_prefix: "osac-instance"
+nico_infra_instance_name_prefix: "osac-instance"
 
 # Agent registration polling
-carbide_infra_agent_registration_retries: 90
-carbide_infra_agent_registration_delay: 10
+nico_infra_agent_registration_retries: 90
+nico_infra_agent_registration_delay: 10
 
 # Batch provisioning
-carbide_infra_topology_optimized: false
+nico_infra_topology_optimized: false
 
 # Wait configuration for instance operations
-carbide_infra_wait: true
-carbide_infra_wait_timeout: 1800
+nico_infra_wait: true
+nico_infra_wait_timeout: 1800
 
 # Optional: Override SSH key group per template
-# carbide_infra_ssh_key_group_id: ""
+# nico_infra_ssh_key_group_id: ""
 
 # Certificate validation for iPXE script fetch
-carbide_infra_validate_certs: false
+nico_infra_validate_certs: false

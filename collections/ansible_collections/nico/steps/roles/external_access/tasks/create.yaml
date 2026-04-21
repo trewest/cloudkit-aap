@@ -30,7 +30,7 @@
     external_access_kube_apiserver_port: "{{ kube_apiserver_service.resources[0].spec.ports[0].port }}"
 
 # =============================================================================
-# Carbide: IP allocation from CIDR registry
+# NICo: IP allocation from CIDR registry
 # =============================================================================
 
 - name: Validate INGRESS_CIDR
@@ -50,7 +50,7 @@
     ingress_cidr_range: "{{ external_access_ingress_cidr_range }}"
     cluster_name: "{{ external_access_name }}"
 
-# For Carbide, API is reached directly via internal IP (no floating IP)
+# For NICo, API is reached directly via internal IP (no floating IP)
 # metallb_ingress_ip is set by allocate_ip above
 - name: Set shared IP variables for DNS
   ansible.builtin.set_fact:
@@ -115,19 +115,19 @@
 
 # =============================================================================
 # Scale-down: clean up BGPPeers for removed agents (requires kubeconfig)
-# carbide_removed_agent_hostnames is set by cluster_infra during scale-down
+# nico_removed_agent_hostnames is set by cluster_infra during scale-down
 # =============================================================================
 
 - name: Clean up BGPPeers for removed agents
   when:
-    - carbide_removed_agent_hostnames is defined
-    - carbide_removed_agent_hostnames | length > 0
+    - nico_removed_agent_hostnames is defined
+    - nico_removed_agent_hostnames | length > 0
   ansible.builtin.include_role:
     name: osac.service.metallb_ingress
     tasks_from: delete_bgp_peers
 
 # =============================================================================
-# Carbide: MetalLB and BGP configuration
+# NICo: MetalLB and BGP configuration
 # =============================================================================
 
 - name: Configure metallb for ingress with BGP
@@ -147,7 +147,7 @@
       kubernetes.core.k8s_info:
         api_version: v1
         kind: ConfigMap
-        name: carbide-ip-registry
+        name: nico-ip-registry
         namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
       register: cleanup_registry
 
@@ -159,7 +159,7 @@
           apiVersion: v1
           kind: ConfigMap
           metadata:
-            name: carbide-ip-registry
+            name: nico-ip-registry
             namespace: "{{ metallb_ip_registry_namespace | default('hardware-inventory') }}"
           data: "{{ cleanup_registry.resources[0].data | dict2items | rejectattr('value', 'equalto', external_access_name) | items2dict }}"
       when: cleanup_registry.resources | length > 0

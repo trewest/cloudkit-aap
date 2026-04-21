@@ -1,3 +1,3 @@
 ---
-# Post-installation tasks for OpenShift 4.20 cluster on Carbide infrastructure
+# Post-installation tasks for OpenShift 4.20 cluster on NICo infrastructure
 # External access (MetalLB/BGP) is configured during install via configure_external_access.yaml

@@ -1,9 +1,9 @@
 ---
 # =============================================================================
-# Carbide authentication
+# NICo authentication
 # =============================================================================
 
-- name: Validate required Carbide credentials are configured
+- name: Validate required NICo credentials are configured
   ansible.builtin.assert:
     that:
       - nvidia_bmm_api_url | length > 0
@@ -14,7 +14,7 @@
       - nvidia_bmm_site_id | length > 0
       - nvidia_bmm_ssa_token_url | length > 0
     fail_msg: >
-      Carbide credentials not configured. Ensure cluster-fulfillment-ig Secret
+      NICo credentials not configured. Ensure cluster-fulfillment-ig Secret
       contains NVIDIA_BMM_API_URL, NVIDIA_BMM_CLIENT_ID, NVIDIA_BMM_CLIENT_SECRET,
       NVIDIA_BMM_ORG, NVIDIA_BMM_TENANT_ID, NVIDIA_BMM_SITE_ID, NVIDIA_BMM_SSA_TOKEN_URL
 
@@ -30,20 +30,20 @@
       grant_type: client_credentials
       scope: "{{ nvidia_bmm_oauth_scope | default(omit) }}"
     status_code: 200
-  register: carbide_token_response
+  register: nico_token_response
   no_log: true
 
-- name: Set Carbide API token for subsequent requests
+- name: Set NICo API token for subsequent requests
   ansible.builtin.set_fact:
-    nvidia_bmm_api_token: "{{ carbide_token_response.json.access_token }}"
+    nvidia_bmm_api_token: "{{ nico_token_response.json.access_token }}"
   no_log: true
 
 # =============================================================================
 # Detach agents and delete infrastructure
 # =============================================================================
 
-# Carbide agents connect via VPC, not ESI L2 network attachment
-- name: Set skip network detach for Carbide
+# NICo agents connect via VPC, not ESI L2 network attachment
+- name: Set skip network detach for NICo
   ansible.builtin.set_fact:
     manage_agents_skip_network_detach: true
 
@@ -54,6 +54,6 @@
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
 
-- name: Delete Carbide cluster infrastructure
-  ansible.builtin.include_tasks: delete_carbide_infra.yaml
+- name: Delete NICo cluster infrastructure
+  ansible.builtin.include_tasks: delete_nico_infra.yaml
   ignore_errors: true
