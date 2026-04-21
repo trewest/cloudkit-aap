@@ -14,7 +14,6 @@
       {{ manage_agents_allocated.resources | selectattr('spec.approved', 'false') }}
 
 - name: Attach new agents to cluster network (ESI only)
-  when: infrastructure_provider is not defined or infrastructure_provider != 'nvidia_bmm'
   ansible.builtin.include_role:
     name: massopencloud.esi.l2
     tasks_from: set_networks_for_node

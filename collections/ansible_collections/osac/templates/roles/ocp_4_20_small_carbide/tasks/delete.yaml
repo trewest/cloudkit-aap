@@ -16,10 +16,10 @@
       name: osac.templates.ocp_4_20_small_carbide
       tasks_from: noop.yml
 
-- name: Set infrastructure provider for backend routing
+- name: Set backend collection and resource class label for Carbide
   ansible.builtin.set_fact:
-    infrastructure_provider: nvidia_bmm
     agent_resource_class_label: "{{ carbide_agent_resource_class_label }}"
+    network_steps_collection: carbide.steps
 
 - name: Step - Pre-delete hook
   ansible.builtin.include_role:

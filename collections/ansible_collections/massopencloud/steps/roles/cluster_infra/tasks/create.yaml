@@ -1,13 +1,9 @@
+---
 - name: Show node requests
   ansible.builtin.debug:
     var: cluster_infra_node_requests
 
-# Backend routing: ESI or Carbide based on infrastructure_provider
-# infrastructure_provider extracted from template meta/osac.yaml by extract_template_info role
-# Defaults to 'esi' for backward compatibility
-
 - name: Create ESI cluster network
-  when: infrastructure_provider | default('esi') == 'esi'
   ansible.builtin.include_role:
     name: massopencloud.esi.network
   vars:
@@ -19,56 +15,8 @@
       purpose: "o-sac"
 
 - name: Set ESI network name
-  when: infrastructure_provider | default('esi') == 'esi'
   ansible.builtin.set_fact:
     cluster_infra_network_name: "network-{{ cluster_infra_name }}"
-
-# Snapshot agents that exist BEFORE carbide_infra runs.  After carbide_infra
-# creates new instances (scale-up), the new agents will lack
-# clusterdeployment-namespace just like agents that HyperShift detached
-# (scale-down).  By recording which agents existed before, we can tell them
-# apart: agents in the snapshot that later lack clusterdeployment-namespace
-# were detached; agents NOT in the snapshot are newly created and must not
-# be cleaned up.
-- name: Snapshot pre-existing Carbide agents
-  when: infrastructure_provider == 'nvidia_bmm'
-  kubernetes.core.k8s_info:
-    kind: Agent
-    api_version: agent-install.openshift.io/v1beta1
-    namespace: "{{ default_agent_namespace }}"
-    label_selectors:
-      - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-  register: pre_carbide_agents
-
-- name: Store pre-existing agent names
-  when: infrastructure_provider == 'nvidia_bmm'
-  ansible.builtin.set_fact:
-    pre_carbide_agent_names: >-
-      {{ (pre_carbide_agents.resources | default([])) | map(attribute='metadata.name') | list }}
-
-- name: Create Carbide cluster infrastructure
-  when: infrastructure_provider == 'nvidia_bmm'
-  ansible.builtin.include_role:
-    name: osac.service.carbide_infra
-  vars:
-    carbide_infra_state: present
-    carbide_infra_name: "{{ cluster_infra_name }}"
-    carbide_infra_namespace: "{{ cluster_working_namespace }}"
-    carbide_infra_node_requests: "{{ cluster_infra_node_requests }}"
-    # Optional template parameters for using existing VPC/prefix
-    carbide_infra_vpc_id: "{{ template_parameters.vpc_id | default('') }}"
-    carbide_infra_vpc_prefix_id: "{{ template_parameters.vpc_prefix_id | default('') }}"
-    carbide_infra_ip_block_id: "{{ template_parameters.ip_block_id }}"
-    carbide_infra_ssh_key_group_id: "{{ template_parameters.ssh_key_group_id | default('') }}"
-
-# Protect agents created in THIS run — those matched by carbide_infra but
-# not in the pre-existing snapshot.
-- name: Compute protected agent names (new agents only)
-  when: infrastructure_provider == 'nvidia_bmm'
-  ansible.builtin.set_fact:
-    carbide_protected_agent_names: >-
-      {{ (carbide_matched_agents | default([]) | map(attribute='agent_name') | list)
-         | difference(pre_carbide_agent_names | default([])) }}
 
 # Handle scale down **before** scale up: if we add new agents first,
 # they may not have spec.clusterDeployment.name set by the time
@@ -111,7 +59,7 @@
 
 - name: Wait for the Agents to be removed from the cluster
   ansible.builtin.include_role:
-    name: manage_agents
+    name: osac.service.manage_agents
     tasks_from: wait_for_agents_to_be_removed
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
@@ -119,74 +67,16 @@
     manage_agents_resource_class: "{{ item.resourceClass }}"
   loop: "{{ updated_cluster_infra_node_requests }}"
 
-# Carbide scale-down: capture instance IDs before detachment removes labels
-- name: Capture Carbide instance IDs from removed agents (before detachment)
-  when: infrastructure_provider == 'nvidia_bmm'
-  block:
-    - name: List agents currently labeled with the cluster order label
-      kubernetes.core.k8s_info:
-        kind: Agent
-        api_version: agent-install.openshift.io/v1beta1
-        namespace: "{{ default_agent_namespace }}"
-        label_selectors:
-          - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-      register: carbide_allocated_agents
-
-    - name: Filter agents removed from the cluster (pre-existing agents only)
-      ansible.builtin.set_fact:
-        carbide_removed_agents: >-
-          {{ carbide_allocated_agents.resources
-             | json_query('[?metadata.labels."agent-install.openshift.io/clusterdeployment-namespace"==``]')
-             | json_query('[?contains(`' + (pre_carbide_agent_names | default([]) | to_json) + '`, metadata.name)]') }}
-
-    - name: Extract instance IDs from removed agents
-      ansible.builtin.set_fact:
-        carbide_removed_instance_ids: >-
-          {{
-            carbide_removed_agents |
-            selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') |
-            map(attribute='metadata.labels.nvidia-bmm-instance-id') |
-            list
-          }}
-
-    - name: Extract hostnames for BGPPeer cleanup
-      ansible.builtin.set_fact:
-        carbide_removed_agent_hostnames: >-
-          {{
-            carbide_removed_agents |
-            selectattr('spec.hostname', 'defined') |
-            map(attribute='spec.hostname') |
-            list
-          }}
-
-    - name: Display scale-down cleanup plan
-      ansible.builtin.debug:
-        msg: "Scale-down cleanup: {{ carbide_removed_instance_ids | length }} instances, {{ carbide_removed_agent_hostnames | length }} BGPPeers to clean up"
-
 - name: Detach agents from cluster
   ansible.builtin.include_role:
-    name: manage_agents
+    name: osac.service.manage_agents
     tasks_from: detach_and_unlabel_all_removed_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
-    manage_agents_protected_agents: "{{ carbide_protected_agent_names | default([]) }}"
-
-# Carbide scale-down: destroy removed instances and clean up BGPPeers
-- name: Clean up Carbide instances for removed agents
-  when:
-    - infrastructure_provider == 'nvidia_bmm'
-    - carbide_removed_instance_ids is defined
-    - carbide_removed_instance_ids | length > 0
-  ignore_errors: true
-  ansible.builtin.include_role:
-    name: osac.service.carbide_infra
-    tasks_from: scale_down_cleanup
-  vars:
-    carbide_infra_name: "{{ cluster_infra_name }}"
 
 - name: Select and label new Agent resources
   ansible.builtin.include_role:
-    name: manage_agents
+    name: osac.service.manage_agents
     tasks_from: select_and_label_new_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
@@ -196,7 +86,7 @@
 
 - name: Attach agents to cluster network and approve them
   ansible.builtin.include_role:
-    name: manage_agents
+    name: osac.service.manage_agents
     tasks_from: attach_and_approve_all_new_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"

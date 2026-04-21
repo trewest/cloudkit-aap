@@ -1,0 +1,21 @@
+---
+# Carbide agents connect via VPC, not ESI L2 network attachment
+- name: Set skip network detach for Carbide
+  ansible.builtin.set_fact:
+    manage_agents_skip_network_detach: true
+
+- name: Detach agents from cluster
+  ansible.builtin.include_role:
+    name: osac.service.manage_agents
+    tasks_from: detach_and_unlabel_all_removed_agents
+  vars:
+    manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
+
+- name: Delete Carbide cluster infrastructure
+  ansible.builtin.include_role:
+    name: osac.service.carbide_infra
+  vars:
+    carbide_infra_state: absent
+    carbide_infra_name: "{{ cluster_infra_name }}"
+    carbide_infra_namespace: "{{ cluster_working_namespace }}"
+  ignore_errors: true
