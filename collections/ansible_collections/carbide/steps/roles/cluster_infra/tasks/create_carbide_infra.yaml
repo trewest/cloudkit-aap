@@ -86,7 +86,9 @@
 
 # Create VPC peering with management cluster so nodes can reach the control plane
 - name: Create VPC peering with management cluster
-  when: nvidia_bmm_mgmt_vpc_id | default('') | length > 0
+  when:
+    - nvidia_bmm_mgmt_vpc_id | default('') | length > 0
+    - carbide_vpc_id != nvidia_bmm_mgmt_vpc_id
   nvidia.bare_metal.vpc_peering:
     state: present
     vpc1_id: "{{ carbide_vpc_id }}"
