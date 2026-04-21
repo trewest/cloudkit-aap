@@ -232,4 +232,4 @@
     tasks_from: attach_and_approve_all_new_agents
   vars:
     manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
-    manage_agents_cluster_network: "{{ cluster_infra_network_name | default(omit) }}"
+    manage_agents_cluster_network: "{{ cluster_infra_network_name | default('') }}"

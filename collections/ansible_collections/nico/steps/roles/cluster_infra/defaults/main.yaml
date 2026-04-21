@@ -49,9 +49,6 @@ nico_infra_instance_name_prefix: "osac-instance"
 nico_infra_agent_registration_retries: 90
 nico_infra_agent_registration_delay: 10
 
-# Batch provisioning
-nico_infra_topology_optimized: false
-
 # Wait configuration for instance operations
 nico_infra_wait: true
 nico_infra_wait_timeout: 1800
