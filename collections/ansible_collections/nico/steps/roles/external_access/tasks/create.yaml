@@ -18,9 +18,9 @@
   register: kube_apiserver_service
 
   # wait until the service exists and has a loadbalancer ip
-  until: >-
-    kube_apiserver_service.resources and
-    kube_apiserver_service.resources[0].status.loadBalancer.ingress | default(false)
+  until:
+    - kube_apiserver_service.resources | length > 0
+    - kube_apiserver_service.resources[0].status.loadBalancer.ingress | default([]) | length > 0
   retries: "{{ external_access_resource_wait_retries }}"
   delay: "{{ external_access_resource_wait_delay }}"
 
