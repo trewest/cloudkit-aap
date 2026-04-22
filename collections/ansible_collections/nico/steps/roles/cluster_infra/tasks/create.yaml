@@ -213,6 +213,22 @@
         manage_agents_cluster_order_name: "{{ cluster_infra_name }}"
         manage_agents_protected_agents: "{{ nico_protected_agent_names | default([]) }}"
 
+    # NICo agents are ephemeral — delete the Agent CR after detachment
+    # so stale agents don't interfere with future provisioning cycles.
+    - name: Delete removed Agent resources
+      when: nico_removed_agents is defined and nico_removed_agents | length > 0
+      kubernetes.core.k8s:
+        state: absent
+        api_version: agent-install.openshift.io/v1beta1
+        kind: Agent
+        name: "{{ agent.metadata.name }}"
+        namespace: "{{ default_agent_namespace }}"
+      loop: "{{ nico_removed_agents }}"
+      loop_control:
+        loop_var: agent
+        label: "Delete agent {{ agent.metadata.name }}"
+      ignore_errors: true
+
     - name: Clean up NICo instances for removed agents
       when:
         - nico_removed_instance_ids is defined
