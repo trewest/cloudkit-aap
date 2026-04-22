@@ -161,18 +161,26 @@
         manage_agents_resource_class: "{{ item.resourceClass }}"
       loop: "{{ updated_cluster_infra_node_requests }}"
 
-    # Capture instance IDs before detachment removes labels
-    - name: Capture NICo instance IDs from removed agents (before detachment)
-      block:
-        - name: List agents currently labeled with the cluster order label
-          kubernetes.core.k8s_info:
-            kind: Agent
-            api_version: agent-install.openshift.io/v1beta1
-            namespace: "{{ default_agent_namespace }}"
-            label_selectors:
-              - "{{ cluster_order_label }}={{ cluster_infra_name }}"
-          register: nico_allocated_agents
+    # Capture instance IDs before detachment removes labels.
+    # Only look for removed agents when the labeled count exceeds the
+    # desired count — otherwise there is nothing to scale down and
+    # unattached agents are simply waiting to be claimed by HyperShift.
+    - name: Count agents labeled for this cluster
+      kubernetes.core.k8s_info:
+        kind: Agent
+        api_version: agent-install.openshift.io/v1beta1
+        namespace: "{{ default_agent_namespace }}"
+        label_selectors:
+          - "{{ cluster_order_label }}={{ cluster_infra_name }}"
+      register: nico_allocated_agents
 
+    - name: Compute total desired node count
+      ansible.builtin.set_fact:
+        nico_total_desired_nodes: "{{ cluster_infra_node_requests | map(attribute='numberOfNodes') | map('int') | sum }}"
+
+    - name: Capture NICo instance IDs from removed agents (before detachment)
+      when: nico_allocated_agents.resources | length > (nico_total_desired_nodes | int)
+      block:
         - name: Filter agents removed from the cluster (pre-existing agents only)
           ansible.builtin.set_fact:
             nico_removed_agents: >-
