@@ -83,13 +83,22 @@
 - name: Create NICo cluster infrastructure
   ansible.builtin.include_tasks: create_nico_infra.yaml
 
-# Protect agents created in THIS run — those matched by nico_infra but
-# not in the pre-existing snapshot.
-- name: Compute protected agent names (new agents only)
+# Protect all agents matched to desired instances.  This covers:
+# - Initial creation / re-runs: all provisioned agents are protected
+# - Scale-up: new agents not yet claimed by HyperShift are protected
+# - Scale-down: agents for instances we want to KEEP are protected
+# Only agents NOT in this list (labeled for this cluster but not matched
+# to a desired instance) can be treated as "removed."
+- name: Compute protected agent names
   ansible.builtin.set_fact:
     nico_protected_agent_names: >-
-      {{ (nico_matched_agents | default([]) | map(attribute='agent_name') | list)
-         | difference(pre_nico_agent_names | default([])) }}
+      {{ nico_matched_agents | default([]) | map(attribute='agent_name') | list }}
+
+# NICo agents connect via VPC, not ESI L2 network attachment
+- name: Set skip network detach and attach for NICo
+  ansible.builtin.set_fact:
+    manage_agents_skip_network_detach: true
+    manage_agents_skip_network_attach: true
 
 # =============================================================================
 # Scale-down handling
@@ -210,12 +219,6 @@
         - nico_removed_instance_ids | length > 0
       ignore_errors: true
       ansible.builtin.include_tasks: scale_down_cleanup.yaml
-
-# NICo agents connect via VPC, not ESI L2 network attachment
-- name: Set skip network detach and attach for NICo
-  ansible.builtin.set_fact:
-    manage_agents_skip_network_detach: true
-    manage_agents_skip_network_attach: true
 
 # =============================================================================
 # Select and attach new agents
