@@ -52,7 +52,7 @@
   ansible.builtin.assert:
     that:
       - metallb_ingress_ip is defined
-      - metallb_ingress_ip | ansible.utils.ipaddr
+      - metallb_ingress_ip | ansible.utils.ipaddr | length > 0
     fail_msg: "IP allocation failed for {{ ingress_cidr_range }}. Got: {{ metallb_ingress_ip | default('undefined') }}"
 
 - name: Update IP registry ConfigMap with new allocation
