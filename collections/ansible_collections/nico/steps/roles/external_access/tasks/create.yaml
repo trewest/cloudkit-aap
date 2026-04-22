@@ -38,7 +38,7 @@
     that:
       - external_access_ingress_cidr_range is defined
       - external_access_ingress_cidr_range | length > 0
-      - external_access_ingress_cidr_range | ansible.utils.ipaddr
+      - external_access_ingress_cidr_range | ansible.utils.ipaddr | length > 0
     fail_msg: "external_access_ingress_cidr_range is not defined or not a valid CIDR"
 
 # Allocate a /32 IP from the CIDR range before DNS records are created
