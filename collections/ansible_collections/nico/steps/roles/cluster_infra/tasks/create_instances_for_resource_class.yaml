@@ -44,10 +44,32 @@
   ansible.builtin.debug:
     msg: "Using SSH key group ID: {{ nico_effective_ssh_key_group_id }}"
 
+# Count existing instances for this cluster/resource class by checking
+# agents that already have the cluster label and resource class label.
+# Only create the delta to reach the desired count.
+- name: "{{ node_request.resourceClass }} - Count existing agents for this resource class"
+  kubernetes.core.k8s_info:
+    kind: Agent
+    api_version: agent-install.openshift.io/v1beta1
+    namespace: "{{ nico_infra_infraenv_namespace }}"
+    label_selectors:
+      - "{{ cluster_order_label }}={{ nico_infra_name }}"
+      - "{{ nico_agent_resource_class_label }}={{ node_request.resourceClass }}"
+  register: existing_agents_for_class
+
+- name: "{{ node_request.resourceClass }} - Compute instances to create"
+  ansible.builtin.set_fact:
+    instances_to_create: "{{ [(node_request.numberOfNodes | int) - (existing_agents_for_class.resources | length), 0] | max }}"
+
+- name: "{{ node_request.resourceClass }} - Display provisioning plan"
+  ansible.builtin.debug:
+    msg: "{{ existing_agents_for_class.resources | length }} agents exist, {{ instances_to_create }} new instance(s) to create"
+
 - name: "{{ node_request.resourceClass }} - Create instances"
+  when: instances_to_create | int > 0
   nvidia.bare_metal.instance:
     state: present
-    name: "{{ nico_infra_instance_name_prefix }}-{{ nico_infra_name }}-{{ node_request.resourceClass }}-{{ instance_index }}"
+    name: "{{ nico_infra_instance_name_prefix }}-{{ nico_infra_name }}-{{ node_request.resourceClass }}-{{ lookup('pipe', 'uuidgen') | lower | truncate(8, True, '') }}"
     tenant_id: "{{ nvidia_bmm_tenant_id }}"
     instance_type_id: "{{ current_instance_type_id }}"
     vpc_id: "{{ nico_vpc_id }}"
@@ -69,15 +91,20 @@
     api_token: "{{ nvidia_bmm_api_token }}"
     org: "{{ nvidia_bmm_org }}"
     api_path_prefix: "{{ nvidia_bmm_api_path_prefix | default('forge') }}"
-  loop: "{{ range(node_request.numberOfNodes | int) | list }}"
+  loop: "{{ range(instances_to_create | int) | list }}"
   loop_control:
     loop_var: instance_index
-    label: "Instance {{ instance_index + 1 }} of {{ node_request.numberOfNodes }}"
+    label: "Instance {{ instance_index + 1 }} of {{ instances_to_create }}"
   register: instance_results
 
-- name: "{{ node_request.resourceClass }} - Collect instance IDs"
+- name: "{{ node_request.resourceClass }} - Collect new instance IDs"
+  when: instance_results.results is defined and instance_results.results | length > 0
   ansible.builtin.set_fact:
-    nico_all_instance_ids: "{{ nico_all_instance_ids | default([]) + (instance_results.results | map(attribute='resource') | map(attribute='id') | list) }}"
+    nico_all_instance_ids: "{{ nico_all_instance_ids | default([]) + (instance_results.results | selectattr('resource', 'defined') | map(attribute='resource') | map(attribute='id') | list) }}"
+
+- name: "{{ node_request.resourceClass }} - Collect existing instance IDs"
+  ansible.builtin.set_fact:
+    nico_all_instance_ids: "{{ nico_all_instance_ids | default([]) + (existing_agents_for_class.resources | selectattr('metadata.labels.nvidia-bmm-instance-id', 'defined') | map(attribute='metadata.labels.nvidia-bmm-instance-id') | list) }}"
 
 - name: "{{ node_request.resourceClass }} - Display provisioned instance count"
   ansible.builtin.debug:
