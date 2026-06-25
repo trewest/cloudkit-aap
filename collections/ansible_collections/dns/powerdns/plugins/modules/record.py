@@ -66,6 +66,10 @@ options:
     type: str
     required: true
     no_log: true
+  validate_certs:
+    description: Whether to validate TLS certificates for the PowerDNS API.
+    type: bool
+    default: true
 author:
   - OSAC Project
 """
@@ -199,6 +203,7 @@ def run_module():
             server_url=dict(type="str", required=True),
             server_id=dict(type="str", default="localhost"),
             api_key=dict(type="str", required=True, no_log=True),
+            validate_certs=dict(type="bool", default=True),
         ),
         required_if=[
             ("state", "present", ["value"]),

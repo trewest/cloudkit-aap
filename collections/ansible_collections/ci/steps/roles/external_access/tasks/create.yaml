@@ -1,1 +1,83 @@
 ---
+- name: Set dns names
+  ansible.builtin.set_fact:
+    external_access_api_domain: "api.{{ external_access_name }}.{{ external_access_base_domain }}"
+    external_access_api_int_domain: "api-int.{{ external_access_name }}.{{ external_access_base_domain }}"
+    external_access_ingress_domain: "apps.{{ external_access_name }}.{{ external_access_base_domain }}"
+
+- name: Get kube-apiserver service
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    namespace: "{{ external_access_namespace }}-{{ external_access_name }}"
+    name: kube-apiserver
+  register: kube_apiserver_service
+  until:
+    - kube_apiserver_service.resources | length > 0
+    - kube_apiserver_service.resources[0].status.loadBalancer.ingress | default([]) | length > 0
+  retries: "{{ external_access_resource_wait_retries }}"
+  delay: "{{ external_access_resource_wait_delay }}"
+
+- name: Set api IP from LoadBalancer
+  ansible.builtin.set_fact:
+    external_access_api_ip: "{{ kube_apiserver_service.resources[0].status.loadBalancer.ingress[0].ip }}"
+
+- name: Create dns records for API
+  ansible.builtin.include_role:
+    name: dns.api.dns
+    tasks_from: create
+  vars:
+    dns_zone: "{{ external_access_base_domain }}"
+    dns_record_name: "{{ item.name }}"
+    dns_record_type: A
+    dns_record_ttl: "{{ external_access_dns_ttl }}"
+    dns_record_value: "{{ item.addr }}"
+    dns_record_overwrite: true
+  loop:
+    - name: "{{ external_access_api_domain }}"
+      addr: "{{ external_access_api_ip }}"
+    - name: "{{ external_access_api_int_domain }}"
+      addr: "{{ external_access_api_ip }}"
+
+- name: Wait for API DNS records
+  ansible.builtin.include_role:
+    name: osac.service.wait_for
+    tasks_from: wait_for_dns
+  vars:
+    wait_for_dns_record: "{{ item }}"
+  loop:
+    - "{{ external_access_api_domain }}"
+    - "{{ external_access_api_int_domain }}"
+
+- name: Get agents labeled for this cluster
+  kubernetes.core.k8s_info:
+    api_version: agent-install.openshift.io/v1beta1
+    kind: Agent
+    namespace: "{{ external_access_agent_namespace }}"
+    label_selectors:
+      - "osac.openshift.io/cluster-order={{ external_access_name }}"
+  register: cluster_agents
+
+- name: Set ingress IP from first agent
+  ansible.builtin.set_fact:
+    external_access_ci_ingress_ip: >-
+      {{ cluster_agents.resources[0] | osac.service.agent_mgmt_ip(manage_agents_provisioning_network_name) }}
+
+- name: Create dns record for ingress wildcard
+  ansible.builtin.include_role:
+    name: dns.api.dns
+    tasks_from: create
+  vars:
+    dns_zone: "{{ external_access_base_domain }}"
+    dns_record_name: "*.{{ external_access_ingress_domain }}"
+    dns_record_type: A
+    dns_record_ttl: "{{ external_access_dns_ttl }}"
+    dns_record_value: "{{ external_access_ci_ingress_ip }}"
+    dns_record_overwrite: true
+
+- name: Wait for ingress DNS record
+  ansible.builtin.include_role:
+    name: osac.service.wait_for
+    tasks_from: wait_for_dns
+  vars:
+    wait_for_dns_record: "default-router.{{ external_access_ingress_domain }}"
