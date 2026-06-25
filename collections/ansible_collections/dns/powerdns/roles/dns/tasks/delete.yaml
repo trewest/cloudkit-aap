@@ -1,0 +1,11 @@
+---
+- name: "Delete DNS record via PowerDNS - {{ dns_record_name }}"
+  dns.powerdns.record:
+    state: absent
+    zone: "{{ dns_zone }}"
+    record: "{{ dns_record_name }}"
+    type: "{{ dns_record_type }}"
+    server_url: "{{ lookup('env', 'POWERDNS_API_URL') | trim }}"
+    server_id: "{{ dns_powerdns_server_id }}"
+    api_key: "{{ lookup('env', 'POWERDNS_API_KEY') | trim }}"
+  no_log: true

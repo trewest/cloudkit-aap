@@ -1,0 +1,5 @@
+---
+dns_record_type: A
+dns_record_ttl: 1800
+dns_record_overwrite: true
+dns_powerdns_server_id: localhost
