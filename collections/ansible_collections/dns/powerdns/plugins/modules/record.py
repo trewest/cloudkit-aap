@@ -136,8 +136,10 @@ def get_existing_records(module, url, headers, record_name, record_type):
 
     if info["status"] != 200:
         module.fail_json(
-            msg="Failed to query zone: HTTP {0}".format(info["status"]),
-            response=info.get("body", ""),
+            msg="Failed to query zone: HTTP {0} — {1}".format(
+                info["status"], info.get("msg", "unknown error")
+            ),
+            url=url,
         )
 
     try:
@@ -185,8 +187,11 @@ def patch_zone(module, url, headers, body):
             error_body = info["body"]
 
         module.fail_json(
-            msg="PowerDNS API error: HTTP {0}".format(info["status"]),
+            msg="PowerDNS API error: HTTP {0} — {1}".format(
+                info["status"], info.get("msg", "unknown error")
+            ),
             response=error_body,
+            url=url,
         )
 
 

@@ -9,4 +9,4 @@
     server_id: "{{ dns_powerdns_server_id }}"
     api_key: "{{ lookup('env', 'POWERDNS_API_KEY') | trim }}"
     validate_certs: "{{ dns_powerdns_validate_certs }}"
-  no_log: true
+  # no_log: true
