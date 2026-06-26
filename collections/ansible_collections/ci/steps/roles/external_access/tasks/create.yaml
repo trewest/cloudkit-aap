@@ -61,7 +61,7 @@
 - name: Set ingress IP from first agent
   ansible.builtin.set_fact:
     external_access_ci_ingress_ip: >-
-      {{ cluster_agents.resources[0] | osac.service.agent_mgmt_ip(manage_agents_provisioning_network_name) }}
+      {{ cluster_agents.resources[0].status.inventory.interfaces[0].ipV4Addresses[0] | ansible.utils.ipaddr('address') }}
 
 - name: Create dns record for ingress wildcard
   ansible.builtin.include_role:
