@@ -55,7 +55,7 @@
     kind: Agent
     namespace: "{{ external_access_agent_namespace }}"
     label_selectors:
-      - "osac.openshift.io/cluster-order={{ external_access_name }}"
+      - "{{ cluster_order_label }}={{ external_access_name }}"
   register: cluster_agents
 
 - name: Set ingress IP from first agent
